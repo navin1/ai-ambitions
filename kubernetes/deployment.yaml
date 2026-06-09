@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-ambitions
+  namespace: ai-ambitions
+  labels:
+    app: ai-ambitions
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-ambitions
+  template:
+    metadata:
+      labels:
+        app: ai-ambitions
+    spec:
+      serviceAccountName: ai-ambitions-ksa
+      containers:
+      - name: ai-ambitions
+        image: REGION-docker.pkg.dev/PROJECT_ID/ai-ambitions/ai-ambitions:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        envFrom:
+        - configMapRef:
+            name: ai-ambitions-config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: ai-ambitions

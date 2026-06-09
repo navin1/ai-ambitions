@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-ambitions-config
+  namespace: ai-ambitions
+data:
+  BIGQUERY_PROJECT_ID: ""        # GCP project that owns the BQ dataset
+  BIGQUERY_DATASET: "ai_ambitions"
+  BQ_JOB_PROJECT_ID: ""          # Project billed for BQ jobs (often same as above)
+  VERTEX_AI_PROJECT: ""          # Required only when AI features are enabled
+  VERTEX_AI_LOCATION: "us-central1"
+  GEMINI_MODEL: "gemini-2.5-flash"
+  LOG_LEVEL: "INFO"

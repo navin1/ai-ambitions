@@ -1,0 +1,31 @@
+# BackendConfig enables IAP on the GKE backend.
+# Prerequisites:
+#   1. Create an OAuth 2.0 client in GCP Console → APIs & Services → Credentials
+#      (Application type: Web application, Authorized redirect URI = your domain)
+#   2. Store the client_id and client_secret in a K8s Secret:
+#      kubectl create secret generic iap-oauth-secret \
+#        --from-literal=client_id=CLIENT_ID \
+#        --from-literal=client_secret=CLIENT_SECRET \
+#        -n ai-ambitions
+#   3. Grant IAP-secured Web App User to allowed users/groups:
+#      gcloud projects add-iam-policy-binding PROJECT_ID \
+#        --member="user:user@example.com" \
+#        --role="roles/iap.httpsResourceAccessor"
+#      # Or for a Google Group:
+#      gcloud projects add-iam-policy-binding PROJECT_ID \
+#        --member="group:team@example.com" \
+#        --role="roles/iap.httpsResourceAccessor"
+
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: ai-ambitions-backendconfig
+  namespace: ai-ambitions
+spec:
+  iap:
+    enabled: true
+    oauthclientCredentials:
+      secretName: iap-oauth-secret
+  timeoutSec: 300
+  connectionDraining:
+    drainingTimeoutSec: 60

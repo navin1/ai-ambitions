@@ -1,0 +1,18 @@
+# NodePort is required for GKE Ingress + IAP integration.
+# The BackendConfig annotation wires this Service to IAP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-ambitions
+  namespace: ai-ambitions
+  annotations:
+    cloud.google.com/backend-config: '{"default": "ai-ambitions-backendconfig"}'
+spec:
+  type: NodePort
+  selector:
+    app: ai-ambitions
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP

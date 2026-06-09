@@ -1,0 +1,75 @@
+substitutions:
+  _REGION: us-central1
+  _CLUSTER: ai-ambitions-cluster
+  _REPO: ai-ambitions
+  _SERVICE: ai-ambitions
+  _NAMESPACE: ai-ambitions
+  _VITE_ENABLE_AI_FEATURES: "false"   # set to "true" to enable AI chat/NL features
+
+steps:
+  # 1. Build image
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - VITE_ENABLE_AI_FEATURES=${_VITE_ENABLE_AI_FEATURES}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
+      - .
+
+  # 2. Push to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}
+
+  # 3. Get GKE credentials
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - container
+      - clusters
+      - get-credentials
+      - ${_CLUSTER}
+      - --region=${_REGION}
+      - --project=${PROJECT_ID}
+
+  # 4. Apply K8s manifests (idempotent — safe to run on every deploy)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: kubectl
+    args:
+      - apply
+      - -f
+      - kubernetes/
+
+  # 5. Roll out the new image
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: kubectl
+    args:
+      - set
+      - image
+      - deployment/${_SERVICE}
+      - ${_SERVICE}=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - -n
+      - ${_NAMESPACE}
+
+  # 6. Wait for rollout to complete
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: kubectl
+    args:
+      - rollout
+      - status
+      - deployment/${_SERVICE}
+      - -n
+      - ${_NAMESPACE}
+      - --timeout=300s
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
