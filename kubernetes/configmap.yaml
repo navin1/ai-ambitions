@@ -4,10 +4,24 @@ metadata:
   name: ai-ambitions-config
   namespace: ai-ambitions
 data:
-  BIGQUERY_PROJECT_ID: ""        # GCP project that owns the BQ dataset
+  # ── BigQuery ──────────────────────────────────────────────────────────────────
+  BIGQUERY_PROJECT_ID: "mygclearning"        # GCP project that owns the BQ dataset
   BIGQUERY_DATASET: "ai_ambitions"
-  BQ_JOB_PROJECT_ID: ""          # Project billed for BQ jobs (often same as above)
-  VERTEX_AI_PROJECT: ""          # Required only when AI features are enabled
+  BQ_JOB_PROJECT_ID: "mygclearning"          # Project billed for BQ jobs (often same as above)
+
+  # ── Vertex AI / Gemini (required only when AI features are enabled) ──────────
+  VERTEX_AI_PROJECT: "mygclearning"
   VERTEX_AI_LOCATION: "us-central1"
   GEMINI_MODEL: "gemini-2.5-flash"
+
+  # ── ForgeRock Identity Gateway ────────────────────────────────────────────────
+  # These are read by the IG sidecar container (not the app). The app only reads
+  # FORGEROCK_EMAIL_HEADER and FORGEROCK_USERNAME_HEADER to know which headers
+  # IG will inject after session validation.
+  FORGEROCK_AM_URL: ""                       # e.g. https://am.example.com/am
+  FORGEROCK_AM_REALM: "/"                    # AM realm (root realm by default)
+  FORGEROCK_AM_COOKIE_NAME: "iPlanetDirectoryPro"  # AM SSO cookie name
+  FORGEROCK_EMAIL_HEADER: "x-fr-email"       # header IG injects with user email
+  FORGEROCK_USERNAME_HEADER: "x-fr-username" # header IG injects with username/uid
+
   LOG_LEVEL: "INFO"

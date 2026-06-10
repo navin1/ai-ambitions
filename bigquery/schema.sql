@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_kpi_summary` (
   plan_value    FLOAT64          OPTIONS(description='Planned / budget target in same unit as actual_value'),
   actual_delta  FLOAT64          OPTIONS(description='Change vs comparison period (positive = improvement)'),
   delta_label   STRING           OPTIONS(description='Human label for the delta, e.g. "vs Q3" or "vs plan"'),
-  updated_at    TIMESTAMP        OPTIONS(description='Last refresh timestamp')
+  update_ts    TIMESTAMP        OPTIONS(description='Last refresh timestamp')
 );
 
 -- ── Table 2: Investment Breakdown ────────────────────────────────────────────
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_investment` (
   plan_amount     FLOAT64          OPTIONS(description='Planned spend in $M'),
   kpi_tag         STRING           OPTIONS(description='For use_case rows: REVENUE | NPS | EFFICIENCY'),
   display_rank    INT64            OPTIONS(description='For use_case rows: sort order (1-based)'),
-  updated_at      TIMESTAMP        OPTIONS(description='Last refresh timestamp')
+  update_ts      TIMESTAMP        OPTIONS(description='Last refresh timestamp')
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_investment` (
 -- ── ai_ambition_kpi_summary seed ─────────────────────────────────────────────
 
 INSERT INTO `ai_ambitions.ai_ambition_kpi_summary`
-  (period, kpi_id, actual_value, plan_value, actual_delta, delta_label, updated_at)
+  (period, kpi_id, actual_value, plan_value, actual_delta, delta_label, update_ts)
 VALUES
   -- YTD
   ('YTD', 'revenue',    4.6,  5.0,   0.4,  'vs Q3',   CURRENT_TIMESTAMP()),
@@ -71,7 +71,7 @@ VALUES
 -- ── ai_ambition_investment seed ───────────────────────────────────────────────
 
 INSERT INTO `ai_ambitions.ai_ambition_investment`
-  (period, dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, updated_at)
+  (period, dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, update_ts)
 VALUES
   -- YTD › category
   ('YTD', 'category', 'Foundation model inference', 18.2, 20.0,  NULL, NULL, CURRENT_TIMESTAMP()),

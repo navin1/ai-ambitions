@@ -1,31 +1,80 @@
-# BackendConfig enables IAP on the GKE backend.
-# Prerequisites:
-#   1. Create an OAuth 2.0 client in GCP Console → APIs & Services → Credentials
-#      (Application type: Web application, Authorized redirect URI = your domain)
-#   2. Store the client_id and client_secret in a K8s Secret:
-#      kubectl create secret generic iap-oauth-secret \
-#        --from-literal=client_id=CLIENT_ID \
-#        --from-literal=client_secret=CLIENT_SECRET \
-#        -n ai-ambitions
-#   3. Grant IAP-secured Web App User to allowed users/groups:
-#      gcloud projects add-iam-policy-binding PROJECT_ID \
-#        --member="user:user@example.com" \
-#        --role="roles/iap.httpsResourceAccessor"
-#      # Or for a Google Group:
-#      gcloud projects add-iam-policy-binding PROJECT_ID \
-#        --member="group:team@example.com" \
-#        --role="roles/iap.httpsResourceAccessor"
+# ForgeRock Identity Gateway — route configuration
+#
+# This ConfigMap is mounted into the IG sidecar at /var/ig/config/routes/.
+# IG reads each *.json file as a route definition on startup.
+#
+# What this route does:
+#   1. SingleSignOnFilter — validates the AM SSO cookie against ForgeRock AM.
+#      Unauthenticated requests are redirected to the AM login page.
+#   2. HeaderFilter (remove) — strips any incoming X-FR-* headers to prevent
+#      client spoofing before they reach the application.
+#   3. HeaderFilter (inject) — adds X-FR-Username and X-FR-Email from the
+#      validated session attributes so the app can read the identity.
+#   4. ReverseProxyHandler — forwards the enriched request to the app container
+#      on localhost:8000 (internal port, not exposed outside the pod).
+#
+# Customise:
+#   • FORGEROCK_AM_URL, FORGEROCK_AM_REALM, FORGEROCK_AM_COOKIE_NAME in configmap.yaml
+#   • The session attribute names (uid, mail) to match your AM user profile schema
+#   • The route condition if you need to exclude paths (e.g. /api/health)
 
-apiVersion: cloud.google.com/v1
-kind: BackendConfig
+apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: ai-ambitions-backendconfig
+  name: ig-routes
   namespace: ai-ambitions
-spec:
-  iap:
-    enabled: true
-    oauthclientCredentials:
-      secretName: iap-oauth-secret
-  timeoutSec: 300
-  connectionDraining:
-    drainingTimeoutSec: 60
+data:
+  ai-ambitions.json: |
+    {
+      "name": "ai-ambitions",
+      "condition": "${matches(request.uri.path, '^/')}",
+      "handler": {
+        "type": "Chain",
+        "config": {
+          "filters": [
+            {
+              "name": "SingleSignOn",
+              "type": "SingleSignOnFilter",
+              "config": {
+                "openamUrl": "${env['FORGEROCK_AM_URL']}",
+                "realm":     "${env['FORGEROCK_AM_REALM']}",
+                "cookieName":"${env['FORGEROCK_AM_COOKIE_NAME']}"
+              }
+            },
+            {
+              "name": "StripIncomingIdentityHeaders",
+              "type": "HeaderFilter",
+              "config": {
+                "messageType": "REQUEST",
+                "remove": [
+                  "${env['FORGEROCK_USERNAME_HEADER']}",
+                  "${env['FORGEROCK_EMAIL_HEADER']}"
+                ]
+              }
+            },
+            {
+              "name": "InjectIdentityHeaders",
+              "type": "HeaderFilter",
+              "config": {
+                "messageType": "REQUEST",
+                "add": {
+                  "${env['FORGEROCK_USERNAME_HEADER']}": [
+                    "${contexts.ssoToken.info['uid'][0]}"
+                  ],
+                  "${env['FORGEROCK_EMAIL_HEADER']}": [
+                    "${contexts.ssoToken.info['mail'][0]}"
+                  ]
+                }
+              }
+            }
+          ],
+          "handler": {
+            "name": "AppProxy",
+            "type": "ReverseProxyHandler",
+            "config": {
+              "baseURI": "http://localhost:8000"
+            }
+          }
+        }
+      }
+    }

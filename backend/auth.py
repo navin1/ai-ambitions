@@ -4,7 +4,7 @@ import json
 import pathlib
 import subprocess
 from dotenv import load_dotenv
-from fastapi import Header
+from fastapi import Header, Request
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -13,21 +13,20 @@ load_dotenv()
 
 SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
 
-# ── IAP user identity ─────────────────────────────────────────────────────────
-# In production GKE + IAP, the load balancer validates the user and injects:
-#   X-Goog-Authenticated-User-Email: accounts.google.com:user@example.com
-#   X-Goog-Authenticated-User-ID:   accounts.google.com:12345678
-# In local dev (no IAP), both headers are absent and we fall back to anonymous.
+# ── ForgeRock Identity Gateway user identity ──────────────────────────────────
+# In production GKE, the ForgeRock IG sidecar validates the AM session cookie
+# and injects identity headers before forwarding the request to this app.
+# Header names must match the HeaderFilter configuration in the IG route.
+# In local dev (no IG), headers are absent and we fall back to dev@local.
+FORGEROCK_EMAIL_HEADER = os.getenv("FORGEROCK_EMAIL_HEADER", "x-fr-email")
+FORGEROCK_USERNAME_HEADER = os.getenv("FORGEROCK_USERNAME_HEADER", "x-fr-username")
 
-async def resolve_user(
-    x_goog_authenticated_user_email: Optional[str] = Header(default=None),
-    x_goog_authenticated_user_id: Optional[str] = Header(default=None),
-) -> dict:
-    if x_goog_authenticated_user_email:
-        # Header value format: "accounts.google.com:user@example.com"
-        email = x_goog_authenticated_user_email.removeprefix("accounts.google.com:")
-        uid = (x_goog_authenticated_user_id or "").removeprefix("accounts.google.com:")
-        return {"id": uid or email, "email": email}
+
+async def resolve_user(request: Request) -> dict:
+    email = request.headers.get(FORGEROCK_EMAIL_HEADER, "")
+    username = request.headers.get(FORGEROCK_USERNAME_HEADER, "")
+    if email:
+        return {"id": username or email, "email": email}
     return {"id": "dev-user", "email": "dev@local"}
 
 

@@ -21,7 +21,7 @@ export function Header({ title, subtitle }: Props) {
       <div className="flex items-center gap-3">
         <img src="/logo.png" alt="Logo" className="h-9 w-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
         <div>
-          <h1 className="text-xl font-bold text-red-600 leading-tight">{title}</h1>
+          <h1 className="text-2xl font-bold text-red-600 leading-tight">{title}</h1>
           {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
         </div>
       </div>

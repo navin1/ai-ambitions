@@ -6,7 +6,7 @@ metadata:
   labels:
     app: ai-ambitions
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: ai-ambitions
@@ -18,31 +18,31 @@ spec:
       serviceAccountName: ai-ambitions-ksa
       containers:
       - name: ai-ambitions
-        image: REGION-docker.pkg.dev/PROJECT_ID/ai-ambitions/ai-ambitions:latest
+        image: us-central1-docker.pkg.dev/mygclearning/ai-ambitions/ai-ambitions:latest
         ports:
-        - containerPort: 8080
+        - containerPort: 8000
           name: http
         envFrom:
         - configMapRef:
             name: ai-ambitions-config
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
+            memory: "512Mi"
+            cpu: "250m"
           limits:
-            memory: "2Gi"
-            cpu: "2000m"
+            memory: "1Gi"
+            cpu: "1000m"
         readinessProbe:
           httpGet:
             path: /api/health
-            port: 8080
-          initialDelaySeconds: 10
+            port: 8000
+          initialDelaySeconds: 15
           periodSeconds: 10
           failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /api/health
-            port: 8080
+            port: 8000
           initialDelaySeconds: 30
           periodSeconds: 30
           failureThreshold: 3
@@ -50,10 +50,3 @@ spec:
           runAsNonRoot: true
           runAsUser: 1000
           allowPrivilegeEscalation: false
-      topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
-        labelSelector:
-          matchLabels:
-            app: ai-ambitions

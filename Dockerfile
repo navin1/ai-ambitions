@@ -27,8 +27,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Playwright bundled Chromium
-RUN playwright install chromium
+# Playwright bundled Chromium — install to a fixed path so the non-root
+# appuser can find it (default ~/.cache is root-only when installed as root).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install chromium && chmod -R 755 /ms-playwright
 
 # Backend source
 COPY backend/ ./
@@ -36,13 +38,15 @@ COPY backend/ ./
 # Built React app → served as static files by FastAPI
 COPY --from=frontend-build /app/dist ./static
 
-ENV PORT=8080
+# App runs on 8000 (internal). The ForgeRock IG sidecar occupies 8080 in K8s,
+# validates AM sessions, and proxies authenticated traffic to localhost:8000.
+ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
 
 # Run as non-root
 RUN useradd -m -u 1000 appuser && chown -R appuser /app
 USER appuser
 
-EXPOSE 8080
+EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

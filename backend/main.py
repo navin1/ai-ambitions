@@ -39,6 +39,14 @@ app.include_router(pdf.router)
 _logger = logging.getLogger("main")
 
 
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+async def favicon():
+    return FileResponse(
+        str(Path(__file__).parent / "assets" / "star.png"),
+        media_type="image/png",
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     _logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
@@ -59,13 +67,10 @@ async def health():
 
 
 @app.get("/api/me")
-async def me(
-    x_goog_authenticated_user_email: str | None = None,
-    x_goog_authenticated_user_id: str | None = None,
-):
-    """Returns the IAP-authenticated user identity (or dev fallback)."""
-    from fastapi import Header as FHeader
-    email = (x_goog_authenticated_user_email or "").removeprefix("accounts.google.com:") or "dev@local"
+async def me(request: Request):
+    """Returns the ForgeRock IG authenticated user identity (or dev fallback)."""
+    from auth import FORGEROCK_EMAIL_HEADER
+    email = request.headers.get(FORGEROCK_EMAIL_HEADER, "") or "dev@local"
     return {"email": email}
 
 
@@ -78,4 +83,7 @@ if _static.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def _spa(full_path: str):
+        candidate = _static / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
         return FileResponse(str(_static / "index.html"))

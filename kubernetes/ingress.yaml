@@ -4,7 +4,9 @@
 #   2. Create a Google-managed SSL certificate:
 #      gcloud compute ssl-certificates create ai-ambitions-cert \
 #        --domains=your-domain.example.com --global
-#   3. Point your DNS A record to the reserved IP address.
+#   3. Ensure ForgeRock AM is reachable from within the GKE cluster
+#      (VPC peering, Private Service Connect, or public endpoint).
+#   4. Point your DNS A record to the reserved IP.
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress

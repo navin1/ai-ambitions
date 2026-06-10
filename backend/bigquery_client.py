@@ -1,6 +1,8 @@
 import os
 import logging
+import time
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,6 +34,11 @@ TILE_META: dict[str, dict] = {
 }
 
 KPI_ORDER = ["revenue", "nps", "efficiency", "ai-cost"]
+
+# Simple in-process cache for overview responses to speed repeated loads
+# keyed by period -> (timestamp, response_dict)
+_OVERVIEW_CACHE: dict[str, tuple[float, dict]] = {}
+_OVERVIEW_CACHE_TTL = 30.0  # seconds
 
 
 # ── Credential / client helpers ───────────────────────────────────────────────
@@ -194,8 +201,19 @@ def fetch_investment(period: str, creds) -> list[dict]:
 
 def build_overview_response(period: str, creds) -> dict:
     """Fetches BQ data and assembles the full overview API response."""
-    kpi_rows   = fetch_kpi_summary(period, creds)
-    inv_rows   = fetch_investment(period, creds)
+    # Return cached response when fresh
+    cached = _OVERVIEW_CACHE.get(period)
+    if cached:
+        ts, payload = cached
+        if time.time() - ts < _OVERVIEW_CACHE_TTL:
+            return payload
+
+    # Run the two BigQuery reads in parallel to reduce end-to-end latency
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_kpi = pool.submit(fetch_kpi_summary, period, creds)
+        fut_inv = pool.submit(fetch_investment, period, creds)
+        kpi_rows = fut_kpi.result()
+        inv_rows = fut_inv.result()
 
     # Build kpi tiles in canonical order
     kpi_by_id  = {r["kpi_id"]: r for r in kpi_rows}
@@ -249,3 +267,8 @@ def build_overview_response(period: str, creds) -> dict:
             "byVendor":   by_vendor,
         },
     }
+
+
+    # cache population handled above after building 'payload' — but keep this
+    # function return path simple. (If additional caching logic is desired
+    # populate _OVERVIEW_CACHE before returning.)

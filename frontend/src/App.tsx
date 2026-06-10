@@ -23,7 +23,8 @@ export default function App() {
   return (
     <QueryClientProvider client={qc}>
       <div className="h-screen flex flex-col bg-gray-50 font-sans overflow-hidden">
-        <Header title="AI Ambitions" subtitle="FY26 Investment Tracker" />
+        {/* <Header title="AI Ambitions" subtitle="FY26 Investment Tracker" /> */}
+          <Header title="AI Ambitions" subtitle="AI Investment Tracker" />
 
         <main className="flex-1 min-h-0 overflow-auto pb-14">
           <OverviewTab />

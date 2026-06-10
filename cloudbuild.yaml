@@ -14,7 +14,7 @@ steps:
       - --build-arg
       - VITE_ENABLE_AI_FEATURES=${_VITE_ENABLE_AI_FEATURES}
       - -t
-      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
       - -t
       - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
       - .
@@ -37,6 +37,13 @@ steps:
       - --region=${_REGION}
       - --project=${PROJECT_ID}
 
+  # 3b. Ensure namespace exists (idempotent)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: sh
+    args:
+      - -c
+      - kubectl create namespace ${_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
   # 4. Apply K8s manifests (idempotent — safe to run on every deploy)
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: kubectl
@@ -52,7 +59,7 @@ steps:
       - set
       - image
       - deployment/${_SERVICE}
-      - ${_SERVICE}=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+      - ${_SERVICE}=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
       - -n
       - ${_NAMESPACE}
 
@@ -68,7 +75,7 @@ steps:
       - --timeout=300s
 
 images:
-  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${COMMIT_SHA}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${BUILD_ID}
   - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest
 
 options:
