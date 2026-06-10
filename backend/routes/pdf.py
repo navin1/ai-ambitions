@@ -4,6 +4,7 @@ import base64
 import tempfile
 import os
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from schemas import PDFRequest
@@ -26,8 +27,8 @@ def _logo_b64() -> str:
 
 def _header_html() -> str:
     logo = _logo_b64()
-    est  = timezone(timedelta(hours=-5))
-    ts   = datetime.now(tz=est).strftime('%m-%d-%Y %H:%M:%S') + ' EST'
+    now  = datetime.now(tz=ZoneInfo("America/New_York"))
+    ts   = now.strftime('%m-%d-%Y %H:%M:%S') + ' ' + now.strftime('%Z')
     img  = (f'<img src="data:image/png;base64,{logo}" '
             f'style="height:28px;display:block;" />'
             if logo else
