@@ -2,6 +2,9 @@
 .env
 .env.local
 .env.*.local
+*-sa.json
+*service-account*.json
+*serviceaccount*.json
 
 # Dev runtime artifacts
 .dev.pids

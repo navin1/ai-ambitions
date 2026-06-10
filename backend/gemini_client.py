@@ -73,11 +73,7 @@ def _init_vertex():
     return GenerativeModel(model_name)
 
 
-try:
-    _model = _init_vertex()
-except Exception as exc:
-    logger.error(f"Vertex AI init failed: {exc}")
-    _model = None  # routes will raise a clean 503 when _model is None
+_model = None  # initialized lazily on first use
 
 
 # ── Schema helpers ─────────────────────────────────────────────────────────────
@@ -318,11 +314,9 @@ def _safe_parse_agent_response(raw: str) -> dict:
 
 
 def _require_model():
+    global _model
     if _model is None:
-        raise RuntimeError(
-            "Vertex AI model is not initialised. "
-            "Check VERTEX_AI_PROJECT in .env and ensure credentials are configured."
-        )
+        _model = _init_vertex()
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

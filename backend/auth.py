@@ -114,24 +114,13 @@ def get_bq_credentials(token: Optional[str] = None):
       2. gcloud auth login credentials via legacy credential file (dev, auto-refresh)
       3. gcloud auth print-access-token (dev fallback)
       4. ADC — covers both Workload Identity (prod) and application-default (dev)
+
+    quota_project_id is intentionally not set on user credentials — it requires
+    serviceusage.services.use which user accounts often lack. The BQ client
+    handles project billing via its own project= parameter in _client().
     """
     from google.oauth2 import credentials as oauth2_creds
     import google.auth
-
-    quota_project = (
-        os.getenv("BQ_JOB_PROJECT_ID")
-        or os.getenv("GOOGLE_CLOUD_PROJECT")
-        or os.getenv("GCP_PROJECT_ID")
-        or os.getenv("BIGQUERY_PROJECT_ID")
-    )
-
-    def _with_quota(creds):
-        if quota_project and hasattr(creds, "with_quota_project"):
-            try:
-                return creds.with_quota_project(quota_project)
-            except Exception:
-                pass
-        return creds
 
     # 1. Explicit service-account JSON
     if SERVICE_ACCOUNT_FILE and os.path.exists(SERVICE_ACCOUNT_FILE):
@@ -145,25 +134,25 @@ def get_bq_credentials(token: Optional[str] = None):
             )
         else:
             creds, _ = google.auth.load_credentials_from_file(SERVICE_ACCOUNT_FILE)
-        return _with_quota(creds)
+        return creds
 
     # 2. gcloud auth login (dev — stored refresh token, auto-refreshes)
     gcloud_creds = _get_gcloud_login_credentials()
     if gcloud_creds is not None:
         logger.info("get_bq_credentials: using gcloud auth login credentials")
-        return _with_quota(gcloud_creds)
+        return gcloud_creds
 
     # 3. gcloud auth print-access-token (dev fallback)
     gcloud_token = _get_gcloud_print_token()
     if gcloud_token:
         logger.info("get_bq_credentials: using token from gcloud auth print-access-token")
-        return oauth2_creds.Credentials(token=gcloud_token, quota_project_id=quota_project)
+        return oauth2_creds.Credentials(token=gcloud_token)
 
     # 4. ADC — Workload Identity in prod, application-default in dev
     try:
         creds, _ = google.auth.default()
         logger.info("get_bq_credentials: using Application Default Credentials")
-        return _with_quota(creds)
+        return creds
     except Exception as e:
         logger.warning("get_bq_credentials: ADC failed: %s", e)
 
