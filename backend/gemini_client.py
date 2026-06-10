@@ -174,7 +174,7 @@ def _table_refs_clause() -> str:
 def _build_system_prompt() -> str:
     schema = _get_schema()
     tables_clause = _table_refs_clause()
-    return f"""You are an expert data analyst for a workforce and spend management dashboard. Generate BigQuery SQL from natural language requests.
+    return f"""You are an expert data analyst for a use case and spend management dashboard. Generate BigQuery SQL from natural language requests.
 
 {schema}
 
@@ -199,7 +199,7 @@ Respond ONLY with a raw JSON object (no markdown fences, no explanation):
   "stacked": false,
   "dual_axis": false,
   "secondary_y": "column_name_or_null",
-  "ai_description": "2-3 sentence insight explaining what this chart shows and why it matters for workforce/spend management."
+  "ai_description": "2-3 sentence insight explaining what this chart shows and why it matters for use case/spend management."
 }}
 
 Chart type guide:
@@ -224,7 +224,7 @@ x_axis / y_axis rules (CRITICAL):
 def _build_chat_system() -> str:
     schema = _get_schema()
     tables_clause = _table_refs_clause()
-    return f"""You are an AI analyst for a workforce and spend management dashboard. You have access to BigQuery and can answer questions, explain data, and generate charts.
+    return f"""You are an AI analyst for a use case and spend management dashboard. You have access to BigQuery and can answer questions, explain data, and generate charts.
 
 {schema}
 
@@ -400,7 +400,7 @@ _BQ_TOOL = Tool(function_declarations=[
 def _build_agent_system() -> str:
     schema = _get_schema()
     tables_clause = _table_refs_clause()
-    return f"""You are an expert AI analyst for a workforce and spend management dashboard. You have direct access to BigQuery via the run_bigquery_query tool.
+    return f"""You are an expert AI analyst for a use case and spend management dashboard. You have direct access to BigQuery via the run_bigquery_query tool.
 
 {schema}
 
@@ -1046,7 +1046,7 @@ def generate_pdf_description(title: str, chart_type: str, data_summary: str) -> 
         f"You are writing a brief narrative for a PDF report section.\n"
         f"Widget title: {title}\nChart type: {chart_type}\nData summary: {data_summary}\n\n"
         f"Write 2-4 sentences of professional, human-readable insight about this data. "
-        f"Focus on what the numbers mean for workforce or spend management. "
+        f"Focus on what the numbers mean for Use Case or spend management. "
         f"Do not mention chart types or technical terms. Plain text only."
     )
     response = _model.generate_content(prompt)

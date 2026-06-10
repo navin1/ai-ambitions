@@ -1,6 +1,6 @@
 # AI Ambitions Dashboard
 
-An executive dashboard for tracking AI investment, ROI, and workforce metrics — built with React + FastAPI, deployed on Google Kubernetes Engine.
+An executive dashboard for tracking AI investment, ROI, and use case metrics — built with React + FastAPI, deployed on Google Kubernetes Engine.
 
 ---
 

@@ -280,7 +280,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
                     widget_title, chart_type, json.dumps(data[:5], default=str)
                 )
             except Exception:
-                description = 'Analysis based on workforce and spend data.'
+                description = 'Analysis based on spend data.'
 
         cfg = _build_chartjs_config(w)
         chart_id = f'chart_{idx}'
@@ -347,7 +347,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     cover_block = f'''
 <div class="cover">
   <div class="cover-rule-top"></div>
-  <p class="cover-eyebrow">Workforce Analytics · Executive Report</p>
+  <p class="cover-eyebrow">Executive Report</p>
   <h1>{title}</h1>
   <p class="sub">{tab_name}</p>
   <div class="cover-divider"></div>
