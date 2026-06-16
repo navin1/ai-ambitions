@@ -1,7 +1,6 @@
 # Backend-only image — FastAPI + Playwright (PDF export). No frontend build
-# stage; the React SPA is built and synced straight to a GCS bucket served by
-# a Compute backend bucket (see kubernetes/setup-static-frontend-lb.sh) —
-# there's no frontend container at all.
+# stage; the React SPA is built and served separately by frontend/Dockerfile
+# (nginx), routed to by the GKE Ingress alongside this service.
 # Build context must be the backend/ directory:
 #   docker build -t <image>:<tag> backend/
 

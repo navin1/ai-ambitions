@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: ai-ambitions-backend
+  name: ai-ambitions-frontend
   namespace: ai-ambitions
 spec:
   type: ClusterIP
   selector:
-    app: ai-ambitions-backend
+    app: ai-ambitions-frontend
   ports:
   - name: http
-    port: 8000
-    targetPort: 8000
+    port: 8080
+    targetPort: 8080
     protocol: TCP
