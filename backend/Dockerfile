@@ -15,9 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 libxtst6 fonts-liberation fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+# Virtual environment — all Python dependencies install here, isolated from
+# system site-packages.
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Python dependencies
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Playwright bundled Chromium — install to a fixed path so the non-root
 # appuser can find it (default ~/.cache is root-only when installed as root).
@@ -31,7 +37,7 @@ ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
 
 # Run as non-root
-RUN useradd -m -u 1000 appuser && chown -R appuser /app
+RUN useradd -m -u 1000 appuser && chown -R appuser /app /opt/venv
 USER appuser
 
 EXPOSE 8000
