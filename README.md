@@ -55,7 +55,7 @@ What it does (in order):
 
 1. Checks `gcloud` and `kubectl` are installed
 2. Sets project `mygclearning` and region `us-central1`
-3. Enables required GCP APIs (Container, Artifact Registry, IAM)
+3. Enables required GCP APIs (Container, Artifact Registry, IAM, Compute)
 4. Creates Artifact Registry repo `ai-ambitions` (skips if exists)
 5. Creates GKE cluster `ai-ambitions-cluster` (skips if exists — takes ~8 min first run)
 6. Fetches `kubectl` credentials for the cluster

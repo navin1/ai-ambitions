@@ -7,10 +7,10 @@
 # After this completes:
 #   1. kubectl apply -f kubernetes/                  (or let ArgoCD do it —
 #      see argocd/application.yaml)
-#   2. ./kubernetes/setup-static-frontend-lb.sh       (one-time — frontend
-#      GCS bucket + load balancer)
-#   3. Push to git / let Jenkins run                  (builds + pushes the
-#      backend image, syncs the frontend build to GCS — see Jenkinsfile)
+#   2. Reserve the Ingress's static IP + managed cert (one-time — see
+#      kubernetes/ingress.yaml)
+#   3. Push to git / let Jenkins run                  (builds + pushes both
+#      the backend and frontend images — see Jenkinsfile)
 #
 # Usage:
 #   chmod +x deploy-gke.sh
@@ -54,7 +54,6 @@ gcloud services enable \
   container.googleapis.com \
   artifactregistry.googleapis.com \
   iam.googleapis.com \
-  storage.googleapis.com \
   compute.googleapis.com \
   --project="$PROJECT_ID"
 ok "APIs enabled"
@@ -130,9 +129,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Infra bootstrap complete!"
 echo "  Next steps:"
 echo "    1. kubectl apply -f kubernetes/                  (or via ArgoCD)"
-echo "    2. ./kubernetes/setup-static-frontend-lb.sh       (one-time)"
-echo "    3. Push to git — Jenkins builds + deploys the backend image"
-echo "       and syncs the frontend build to the GCS bucket"
+echo "    2. Reserve the Ingress static IP + managed cert  (one-time, see"
+echo "       kubernetes/ingress.yaml)"
+echo "    3. Push to git — Jenkins builds + deploys both the backend"
+echo "       and frontend images"
 echo "  Quick local check once the backend is running:"
 echo "    kubectl port-forward svc/ai-ambitions-backend 8000:8000 -n ${NAMESPACE}"
 echo "    curl http://localhost:8000/api/health"
