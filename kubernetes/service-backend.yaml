@@ -1,0 +1,22 @@
+# Standalone NEG annotation — GKE syncs each pod IP into a Compute Engine
+# Network Endpoint Group named after this Service/port, which the manually
+# created backend service (see setup-static-frontend-lb.sh) attaches to
+# directly. There's no GKE-managed Ingress in front of this Service anymore:
+# the GCS-backed frontend can't be expressed in a Kubernetes Ingress object,
+# so routing is done by a manually managed Compute load balancer instead.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-ambitions-backend
+  namespace: ai-ambitions
+  annotations:
+    cloud.google.com/neg: '{"exposed_ports": {"8000":{}}}'
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-ambitions-backend
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP

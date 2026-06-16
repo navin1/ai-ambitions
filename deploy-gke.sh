@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
-# deploy-gke.sh — one-shot GKE setup + Cloud Build deploy for ai-ambitions
+# deploy-gke.sh — one-shot GKE + IAM bootstrap for ai-ambitions (cluster,
+# Artifact Registry repo, app service account, Workload Identity binding).
 # Safe to run multiple times (all steps are idempotent).
+#
+# This only provisions infrastructure — it does not build or deploy the app.
+# After this completes:
+#   1. kubectl apply -f kubernetes/                  (or let ArgoCD do it —
+#      see argocd/application.yaml)
+#   2. ./kubernetes/setup-static-frontend-lb.sh       (one-time — frontend
+#      GCS bucket + load balancer)
+#   3. Push to git / let Jenkins run                  (builds + pushes the
+#      backend image, syncs the frontend build to GCS — see Jenkinsfile)
 #
 # Usage:
 #   chmod +x deploy-gke.sh
@@ -43,8 +53,9 @@ step "Enabling required GCP APIs (may take 1-2 min on first run)"
 gcloud services enable \
   container.googleapis.com \
   artifactregistry.googleapis.com \
-  cloudbuild.googleapis.com \
   iam.googleapis.com \
+  storage.googleapis.com \
+  compute.googleapis.com \
   --project="$PROJECT_ID"
 ok "APIs enabled"
 
@@ -61,51 +72,7 @@ else
   ok "Repo '$REPO' created"
 fi
 
-# ── 5. Cloud Build service account permissions ────────────────────────────────
-step "Granting Cloud Build SA permissions"
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-CB_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
-COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${CB_SA}" \
-  --role="roles/container.developer" \
-  --condition=None \
-  --quiet
-ok "Granted roles/container.developer to Cloud Build SA"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${CB_SA}" \
-  --role="roles/artifactregistry.writer" \
-  --condition=None \
-  --quiet
-ok "Granted roles/artifactregistry.writer to Cloud Build SA"
-
-# cloud-sdk builder steps inside Cloud Build authenticate via the Compute Engine
-# default SA (metadata server), not the Cloud Build SA. container.clusters.get
-# (required by get-credentials) is not in container.developer, so grant viewer.
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${COMPUTE_SA}" \
-  --role="roles/container.viewer" \
-  --condition=None \
-  --quiet
-ok "Granted roles/container.viewer to Compute Engine default SA (used by cloud-sdk builder)"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${COMPUTE_SA}" \
-  --role="roles/container.developer" \
-  --condition=None \
-  --quiet
-ok "Granted roles/container.developer to Compute Engine default SA"
-
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${COMPUTE_SA}" \
-  --role="roles/artifactregistry.writer" \
-  --condition=None \
-  --quiet
-ok "Granted roles/artifactregistry.writer to Compute Engine default SA"
-
-# ── 6. GKE cluster ────────────────────────────────────────────────────────────
+# ── 5. GKE cluster ────────────────────────────────────────────────────────────
 step "Creating GKE cluster (skips if already exists — takes ~8 min on first run)"
 if gcloud container clusters describe "$CLUSTER" \
      --region="$REGION" --project="$PROJECT_ID" &>/dev/null; then
@@ -120,14 +87,14 @@ else
   ok "Cluster '$CLUSTER' created"
 fi
 
-# ── 7. kubectl credentials ────────────────────────────────────────────────────
+# ── 6. kubectl credentials ────────────────────────────────────────────────────
 step "Fetching kubectl credentials"
 gcloud container clusters get-credentials "$CLUSTER" \
   --region="$REGION" \
   --project="$PROJECT_ID"
 ok "kubectl configured for cluster '$CLUSTER'"
 
-# ── 8. App GCP service account (for BigQuery / Workload Identity) ─────────────
+# ── 7. App GCP service account (for BigQuery / Workload Identity) ─────────────
 step "Creating app GCP service account"
 APP_SA_EMAIL="${APP_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
 if gcloud iam service-accounts describe "$APP_SA_EMAIL" \
@@ -149,7 +116,7 @@ for role in roles/bigquery.dataViewer roles/bigquery.jobUser; do
   ok "Granted $role"
 done
 
-# ── 9. Workload Identity binding ──────────────────────────────────────────────
+# ── 8. Workload Identity binding ──────────────────────────────────────────────
 step "Binding Kubernetes SA to GCP SA (Workload Identity)"
 gcloud iam service-accounts add-iam-policy-binding "$APP_SA_EMAIL" \
   --role="roles/iam.workloadIdentityUser" \
@@ -158,21 +125,15 @@ gcloud iam service-accounts add-iam-policy-binding "$APP_SA_EMAIL" \
   --quiet
 ok "Workload Identity binding created"
 
-# ── 10. Cloud Build submit ────────────────────────────────────────────────────
-step "Submitting Cloud Build (build → push → deploy to GKE)"
-echo "  This streams live logs and takes ~5-8 minutes."
-echo
-gcloud builds submit \
-  --config=cloudbuild.yaml \
-  --project="$PROJECT_ID"
-
-# ── 11. Verify ────────────────────────────────────────────────────────────────
-step "Verifying deployment"
-kubectl get pods -n "$NAMESPACE"
 echo
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Deploy complete!"
-echo "  Access the app:"
-echo "    kubectl port-forward svc/${NAMESPACE} 8080:80 -n ${NAMESPACE}"
-echo "  Then open: http://localhost:8080"
+echo "  Infra bootstrap complete!"
+echo "  Next steps:"
+echo "    1. kubectl apply -f kubernetes/                  (or via ArgoCD)"
+echo "    2. ./kubernetes/setup-static-frontend-lb.sh       (one-time)"
+echo "    3. Push to git — Jenkins builds + deploys the backend image"
+echo "       and syncs the frontend build to the GCS bucket"
+echo "  Quick local check once the backend is running:"
+echo "    kubectl port-forward svc/ai-ambitions-backend 8000:8000 -n ${NAMESPACE}"
+echo "    curl http://localhost:8000/api/health"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

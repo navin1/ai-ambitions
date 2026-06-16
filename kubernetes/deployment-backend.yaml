@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-ambitions
+  name: ai-ambitions-backend
   namespace: ai-ambitions
   labels:
-    app: ai-ambitions
+    app: ai-ambitions-backend
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ai-ambitions
+      app: ai-ambitions-backend
   template:
     metadata:
       labels:
-        app: ai-ambitions
+        app: ai-ambitions-backend
     spec:
       serviceAccountName: ai-ambitions-ksa
       containers:
-      - name: ai-ambitions
-        image: us-central1-docker.pkg.dev/mygclearning/ai-ambitions/ai-ambitions:latest
+      - name: ai-ambitions-backend
+        image: us-central1-docker.pkg.dev/mygclearning/ai-ambitions/ai-ambitions-backend:latest
         ports:
         - containerPort: 8000
           name: http
