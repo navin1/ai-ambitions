@@ -1,0 +1,35 @@
+# ArgoCD Application — watches this repo's kubernetes/ folder and syncs any
+# change (e.g. the image tag Jenkins writes into deployment.yaml) to the
+# ai-ambitions namespace in GKE.
+#
+# Apply once to register it with ArgoCD:
+#   kubectl apply -n argocd -f argocd/application.yaml
+#
+# Prerequisites:
+#   - ArgoCD is installed in the GKE cluster (namespace argocd)
+#   - If this repo is private, ArgoCD needs repo access configured first:
+#       argocd repo add git@github.com:navin1/ai-ambitions.git --ssh-private-key-path <key>
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-ambitions
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: git@github.com:navin1/ai-ambitions.git
+    targetRevision: main
+    path: kubernetes
+
+  destination:
+    server: https://kubernetes.default.svc   # ArgoCD running in the same GKE cluster
+    namespace: ai-ambitions
+
+  syncPolicy:
+    automated:
+      prune: true       # remove resources deleted from kubernetes/
+      selfHeal: true     # revert manual cluster drift back to git state
+    syncOptions:
+      - CreateNamespace=true

@@ -22,10 +22,10 @@ interface TileMeta {
 // ── Static tile metadata — UI configuration only, never changes ───────────────
 
 const TILE_META: TileMeta[] = [
+  { id: 'ai-cost',    label: 'AI Cost',         rangeMin: 0, rangeMax: 60, targetMin: 0,  targetMax: 45, rangeUnit: 'M', targetLabel: '', isSpendTile: true },
   { id: 'revenue',    label: 'Revenue Growth',  rangeMin: 0, rangeMax: 10, targetMin: 3,  targetMax: 7,  rangeUnit: '%', targetLabel: 'target band 3–7%'   },
   { id: 'nps',        label: 'NPS Improvement', rangeMin: 0, rangeMax: 6,  targetMin: 2,  targetMax: 4,  rangeUnit: '',  targetLabel: 'target band 2–4'    },
   { id: 'efficiency', label: 'Efficiency Gain', rangeMin: 0, rangeMax: 50, targetMin: 30, targetMax: 40, rangeUnit: '%', targetLabel: 'target band 30–40%' },
-  { id: 'ai-cost',    label: 'AI Cost',         rangeMin: 0, rangeMax: 60, targetMin: 0,  targetMax: 45, rangeUnit: 'M', targetLabel: '', isSpendTile: true },
 ]
 
 const DRILL_VIEWS: { key: DrillView; label: string }[] = [
@@ -72,11 +72,11 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
           <div className="absolute top-1/2 -translate-y-1/2 w-px h-5 bg-amber-400" style={{ left: planL }} />
         </div>
         <div className="relative flex justify-between mt-2">
-          <span className="text-[11px] text-gray-400">$0M</span>
-          <span className="absolute text-[11px] font-semibold text-amber-600 -translate-x-1/2 whitespace-nowrap" style={{ left: planL }}>
+          <span className="text-[13px] text-gray-400">$0M</span>
+          <span className="absolute text-[13px] font-semibold text-amber-600 -translate-x-1/2 whitespace-nowrap" style={{ left: planL }}>
             plan ${budget}M
           </span>
-          <span className="text-[11px] text-gray-400">${rangeMax}M</span>
+          <span className="text-[13px] text-gray-400">${rangeMax}M</span>
         </div>
       </div>
     )
@@ -103,9 +103,9 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
         />
       </div>
       <div className="flex justify-between mt-2">
-        <span className="text-[11px] text-gray-400">{rangeMin}{rangeUnit}</span>
-        <span className="text-[11px] font-medium text-gray-500">{targetLabel}</span>
-        <span className="text-[11px] text-gray-400">{rangeMax}{rangeUnit}</span>
+        <span className="text-[13px] text-gray-400">{rangeMin}{rangeUnit}</span>
+        <span className="text-[13px] font-medium text-gray-500">{targetLabel}</span>
+        <span className="text-[13px] text-gray-400">{rangeMax}{rangeUnit}</span>
       </div>
     </div>
   )
@@ -144,7 +144,7 @@ function KpiCard({ meta, val, period, vsPlan }: {
             {val.statusLabel}
           </span>
           {vsPlan && val.planLabel && !meta.isSpendTile && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sky-600 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0" />
               {val.planLabel}
             </span>
@@ -388,18 +388,24 @@ export function OverviewTab() {
         <div className="flex items-center gap-2">
           {/* Period selector */}
           <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={clsx(
-                  'px-4 py-2 text-xs font-bold tracking-wide transition-all',
-                  period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
-                )}
-              >
-                {p}
-              </button>
-            ))}
+            {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
+              const isDisabled = p !== 'YTD'
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  disabled={isDisabled}
+                  className={clsx(
+                    'px-4 py-2 text-xs font-bold tracking-wide transition-all',
+                    isDisabled
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
+                  )}
+                >
+                  {p}
+                </button>
+              )
+            })}
           </div>
 
           {/* VS PLAN */}

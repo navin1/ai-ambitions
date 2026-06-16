@@ -33,7 +33,7 @@ TILE_META: dict[str, dict] = {
     "ai-cost":    {"range_min": 0, "range_max": 60,  "target_min": 0,  "target_max": 45, "is_spend": True},
 }
 
-KPI_ORDER = ["revenue", "nps", "efficiency", "ai-cost"]
+KPI_ORDER = ["ai-cost", "revenue", "nps", "efficiency"]
 
 # Simple in-process cache for overview responses to speed repeated loads
 # keyed by period -> (timestamp, response_dict)
