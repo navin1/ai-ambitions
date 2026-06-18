@@ -187,11 +187,23 @@ def fetch_kpi_summary(period: str, creds) -> list[dict]:
     return _run_raw(sql, creds)
 
 
+def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
+    if period not in VALID_PERIODS:
+        raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
+    sql = f"""
+        SELECT kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank
+        FROM `{PROJECT_ID}.{DATASET}.ai_ambition_kpi_breakdown`
+        WHERE period = '{period}'
+        ORDER BY kpi_id, dimension_type, COALESCE(display_rank, 999), actual_value DESC
+    """
+    return _run_raw(sql, creds)
+
+
 def fetch_investment(period: str, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
-        SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank
+        SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, description, csg, functional_area
         FROM `{PROJECT_ID}.{DATASET}.ai_ambition_investment`
         WHERE period = '{period}'
         ORDER BY dimension_type, COALESCE(display_rank, 999), actual_amount DESC
@@ -208,12 +220,14 @@ def build_overview_response(period: str, creds) -> dict:
         if time.time() - ts < _OVERVIEW_CACHE_TTL:
             return payload
 
-    # Run the two BigQuery reads in parallel to reduce end-to-end latency
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut_kpi = pool.submit(fetch_kpi_summary, period, creds)
-        fut_inv = pool.submit(fetch_investment, period, creds)
-        kpi_rows = fut_kpi.result()
-        inv_rows = fut_inv.result()
+    # Run the three BigQuery reads in parallel to reduce end-to-end latency
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fut_kpi = pool.submit(fetch_kpi_summary,   period, creds)
+        fut_inv = pool.submit(fetch_investment,     period, creds)
+        fut_brk = pool.submit(fetch_kpi_breakdown,  period, creds)
+        kpi_rows      = fut_kpi.result()
+        inv_rows      = fut_inv.result()
+        breakdown_rows = fut_brk.result()
 
     # Build kpi tiles in canonical order
     kpi_by_id  = {r["kpi_id"]: r for r in kpi_rows}
@@ -246,11 +260,14 @@ def build_overview_response(period: str, creds) -> dict:
         elif dt == "use_case":
             rank = r.get("display_rank")
             by_use_case.append({
-                "rank":   f"{int(rank):02d}" if rank is not None else "—",
-                "name":   r["dimension_name"],
-                "kpi":    r.get("kpi_tag") or "",
-                "amount": float(r["actual_amount"] or 0),
-                "plan":   float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
+                "rank":          f"{int(rank):02d}" if rank is not None else "—",
+                "name":          r["dimension_name"],
+                "kpi":           r.get("kpi_tag") or "",
+                "amount":        float(r["actual_amount"] or 0),
+                "plan":          float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
+                "description":   r.get("description") or None,
+                "csg":           r.get("csg") or None,
+                "functionalArea": r.get("functional_area") or None,
             })
         elif dt == "vendor":
             by_vendor.append({
@@ -259,6 +276,31 @@ def build_overview_response(period: str, creds) -> dict:
                 "plan":   float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
             })
 
+    # Partition kpi_breakdown rows by kpi_id and dimension_type
+    kpi_breakdown: dict = {
+        "revenue":    {"byCategory": [], "byUseCase": [], "byVendor": []},
+        "nps":        {"byCategory": [], "byUseCase": [], "byVendor": []},
+        "efficiency": {"byCategory": [], "byUseCase": [], "byVendor": []},
+    }
+    for r in breakdown_rows:
+        kid = r.get("kpi_id", "")
+        dt  = r.get("dimension_type", "")
+        if kid not in kpi_breakdown:
+            continue
+        item = {
+            "label": r["dimension_name"],
+            "value": float(r["actual_value"] or 0),
+            "plan":  float(r["plan_value"] or 0) if r.get("plan_value") is not None else None,
+            "rank":  f"{int(r['display_rank']):02d}" if r.get("display_rank") is not None else None,
+        }
+        target = kpi_breakdown[kid]
+        if dt == "category":
+            target["byCategory"].append(item)
+        elif dt == "use_case":
+            target["byUseCase"].append(item)
+        elif dt == "vendor":
+            target["byVendor"].append(item)
+
     return {
         "kpis": kpis,
         "investment": {
@@ -266,6 +308,7 @@ def build_overview_response(period: str, creds) -> dict:
             "byUseCase":  by_use_case,
             "byVendor":   by_vendor,
         },
+        "kpiBreakdown": kpi_breakdown,
     }
 
 

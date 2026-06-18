@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { Download } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { fetchOverviewSummary, type TileVal, type DrillData, type BarItem } from '../api/overview'
+import { fetchOverviewSummary, type TileVal, type DrillData, type KpiDrillData } from '../api/overview'
 import { exportOverviewPDF } from '../api/pdf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Status    = 'in-band' | 'below-target' | 'above-target' | 'under-plan' | 'over-plan'
-type DrillView = 'category' | 'use-case' | 'vendor'
+type DrillView = 'category' | 'vendor'
 type Period    = 'YTD' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
 interface TileMeta {
@@ -30,18 +30,17 @@ const TILE_META: TileMeta[] = [
 
 const DRILL_VIEWS: { key: DrillView; label: string }[] = [
   { key: 'category', label: 'By Category' },
-  { key: 'use-case', label: 'By Use Case' },
   { key: 'vendor',   label: 'By Vendor'   },
 ]
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const STATUS: Record<Status, { strip: string; dot: string; badgeText: string; badgeBg: string; badgeBorder: string }> = {
-  'in-band':      { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200' },
-  'below-target': { strip: 'bg-amber-400',   dot: 'bg-amber-400',   badgeText: 'text-amber-700',   badgeBg: 'bg-amber-50',    badgeBorder: 'border-amber-200'   },
-  'above-target': { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200' },
-  'under-plan':   { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200' },
-  'over-plan':    { strip: 'bg-rose-400',    dot: 'bg-rose-400',    badgeText: 'text-rose-700',    badgeBg: 'bg-rose-50',     badgeBorder: 'border-rose-200'    },
+const STATUS: Record<Status, { strip: string; dot: string; badgeText: string; badgeBg: string; badgeBorder: string; ring: string; ringOffset: string }> = {
+  'in-band':      { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'below-target': { strip: 'bg-amber-400',   dot: 'bg-amber-400',   badgeText: 'text-amber-700',   badgeBg: 'bg-amber-50',    badgeBorder: 'border-amber-200',   ring: 'ring-amber-400',   ringOffset: 'ring-offset-amber-400'   },
+  'above-target': { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'under-plan':   { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'over-plan':    { strip: 'bg-rose-400',    dot: 'bg-rose-400',    badgeText: 'text-rose-700',    badgeBg: 'bg-rose-50',     badgeBorder: 'border-rose-200',    ring: 'ring-rose-400',    ringOffset: 'ring-offset-rose-400'    },
 }
 
 const KPI_TAG: Record<string, string> = {
@@ -113,12 +112,18 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 
-function KpiCard({ meta, val, period, vsPlan }: {
-  meta: TileMeta; val: TileVal; period: Period; vsPlan: boolean
+function KpiCard({ meta, val, period, vsPlan, isSelected, onClick }: {
+  meta: TileMeta; val: TileVal; period: Period; vsPlan: boolean; isSelected: boolean; onClick: () => void
 }) {
   const t = STATUS[val.status as Status] ?? STATUS['in-band']
   return (
-    <div className="relative flex flex-col rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-gray-100 hover:shadow-lg transition-shadow duration-200">
+    <div
+      onClick={onClick}
+      className={clsx(
+        'relative flex flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg',
+        isSelected ? clsx('ring-2 ring-offset-2', t.ring, t.ringOffset) : 'ring-1 ring-gray-100',
+      )}
+    >
       <div className={clsx('absolute left-0 top-0 bottom-0 w-1', t.strip)} />
       <div className="pl-6 pr-5 pt-5 pb-5 flex flex-col flex-1">
         <div className="flex justify-between items-center">
@@ -173,30 +178,33 @@ function KpiCardSkeleton() {
 
 // ── Bar chart widget ──────────────────────────────────────────────────────────
 
-function BarChartWidget({ drill, view, vsPlan, costLabel }: {
-  drill: DrillData; view: DrillView; vsPlan: boolean; costLabel: string
+function fmtVal(v: number, unit: string): string {
+  if (unit === '$M')  return `$${v.toFixed(1)}M`
+  if (unit === 'pts') return `${v.toFixed(1)} pts`
+  return `${v.toFixed(1)}%`
+}
+
+function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M' }: {
+  drill: DrillData; view: DrillView; vsPlan: boolean
+  kpiDrill?: KpiDrillData | null; unit?: string
 }) {
-  const items: BarItem[] =
-    view === 'category' ? drill.byCategory :
-    view === 'vendor'   ? drill.byVendor   :
-    drill.byUseCase.map(u => ({ label: u.name, amount: u.amount, plan: u.plan }))
+  const items: Array<{ label: string; amount: number; plan?: number | null }> = kpiDrill
+    ? (view === 'category' ? kpiDrill.byCategory : kpiDrill.byVendor).map(i => ({ label: i.label, amount: i.value, plan: i.plan }))
+    : view === 'category' ? drill.byCategory : drill.byVendor
 
   const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)))
   const total  = items.reduce((s, i) => s + i.amount, 0)
 
-  const heading =
-    view === 'category' ? 'Spend by category' :
-    view === 'vendor'   ? 'Spend by vendor'   :
-    'Spend by initiative'
+  const heading = view === 'category' ? (kpiDrill ? 'By category' : 'Spend by category')
+                                      : (kpiDrill ? 'By vendor'   : 'Spend by vendor')
 
   return (
-    <div className="col-span-2 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+    <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">{heading}</p>
-          <p className="text-sm font-black text-gray-900 mt-0.5">${total.toFixed(1)}M total</p>
+          <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(total, unit)} total</p>
         </div>
-        <p className="text-[10px] text-gray-400 font-medium text-right leading-relaxed max-w-[120px]">{costLabel}</p>
       </div>
       <div className="space-y-5 flex-1">
         {items.map((item, i) => {
@@ -210,11 +218,11 @@ function BarChartWidget({ drill, view, vsPlan, costLabel }: {
                 <span className="text-sm font-semibold text-gray-700 leading-tight pr-4">{item.label}</span>
                 <div className="flex items-center gap-2 shrink-0">
                   {vsPlan && item.plan != null && (
-                    <span className={clsx('text-[11px] font-semibold', isOver ? 'text-rose-500' : 'text-sky-500')}>
-                      Plan ${item.plan}M
+                    <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                      Plan {fmtVal(item.plan, unit)}
                     </span>
                   )}
-                  <span className="text-sm font-black text-gray-900 tabular-nums">${item.amount}M</span>
+                  <span className="text-sm font-black text-gray-900 tabular-nums">{fmtVal(item.amount, unit)}</span>
                 </div>
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -229,7 +237,7 @@ function BarChartWidget({ drill, view, vsPlan, costLabel }: {
                   style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
                 />
               </div>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
+              {!kpiDrill && <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>}
             </div>
           )
         })}
@@ -247,18 +255,100 @@ function BarChartWidget({ drill, view, vsPlan, costLabel }: {
 
 // ── Use case table widget ─────────────────────────────────────────────────────
 
-function UseCaseWidget({ drill, vsPlan }: { drill: DrillData; vsPlan: boolean }) {
+function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
+  drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string
+}) {
+  // Description lookup for kpi-metric mode (tooltip still works via name match)
+  const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
+
+  if (kpiDrill) {
+    // ── KPI metric mode (Revenue / NPS / Efficiency) ───────────────────────
+    const items  = kpiDrill.byUseCase
+    const maxVal = Math.max(...items.map(u => Math.max(u.value, u.plan ?? 0)))
+    const cols   = vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))'
+    return (
+      <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+        <div className="mb-6">
+          <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
+            Top {items.length} use cases by {unit === 'pts' ? 'NPS impact' : 'metric impact'}
+          </p>
+        </div>
+        <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
+          <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400">#</div>
+          <div className="col-span-7 text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
+          <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400">Metric</div>
+          <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400 text-right">{unit}</div>
+          {vsPlan && <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
+        </div>
+        <div className="flex-1">
+          {items.map((uc, i) => {
+            const actualW = `${(uc.value / maxVal) * 100}%`
+            const planW   = uc.plan != null ? `${(uc.plan / maxVal) * 100}%` : '0%'
+            const isOver  = uc.plan != null && uc.value > uc.plan
+            const desc    = descByName[uc.label]
+            return (
+              <div
+                key={uc.rank ?? uc.label}
+                className={clsx(
+                  'grid items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
+                  i < items.length - 1 && 'border-b border-gray-50',
+                )}
+                style={{ gridTemplateColumns: cols }}
+              >
+                <div className="col-span-1">
+                  <span className="text-xs font-black font-mono text-gray-300">{uc.rank ?? String(i + 1).padStart(2, '0')}</span>
+                </div>
+                <div className="col-span-7 pr-2">
+                  <div className="relative group inline-block">
+                    <span className="text-sm font-semibold text-gray-800 leading-snug cursor-default">{uc.label}</span>
+                    {desc && (
+                      <div className="absolute left-0 top-full mt-1.5 z-50 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed pointer-events-none">
+                        {desc}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-span-2 pr-2">
+                  <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    {vsPlan && uc.plan != null && (
+                      <div className="absolute inset-y-0 left-0 bg-sky-100 rounded-full" style={{ width: planW }} />
+                    )}
+                    <div
+                      className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                      style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
+                    {fmtVal(uc.value, unit)}
+                  </span>
+                </div>
+                {vsPlan && (
+                  <div className="col-span-1 text-right">
+                    <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>{uc.plan != null ? fmtVal(uc.plan, unit) : '—'}</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── AI Cost mode (spend $M) ────────────────────────────────────────────────
   const items  = drill.byUseCase
   const maxAmt = Math.max(...items.map(u => Math.max(u.amount, u.plan ?? 0)))
-
+  const cols   = vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))'
   return (
-    <div className="col-span-3 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+    <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="mb-6">
         <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
           Top {items.length} use cases by spend
         </p>
       </div>
-      <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))' }}>
+      <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
         <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400">#</div>
         <div className="col-span-5 text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
         <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400">KPI</div>
@@ -278,13 +368,20 @@ function UseCaseWidget({ drill, vsPlan }: { drill: DrillData; vsPlan: boolean })
                 'grid items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
                 i < items.length - 1 && 'border-b border-gray-50',
               )}
-              style={{ gridTemplateColumns: vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))' }}
+              style={{ gridTemplateColumns: cols }}
             >
               <div className="col-span-1">
                 <span className="text-xs font-black font-mono text-gray-300">{uc.rank}</span>
               </div>
               <div className="col-span-5 pr-2">
-                <span className="text-sm font-semibold text-gray-800 leading-snug">{uc.name}</span>
+                <div className="relative group inline-block">
+                  <span className="text-sm font-semibold text-gray-800 leading-snug cursor-default">{uc.name}</span>
+                  {uc.description && (
+                    <div className="absolute left-0 top-full mt-1.5 z-50 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed pointer-events-none">
+                      {uc.description}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="col-span-2">
                 <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', kpiTag(uc.kpi))}>
@@ -309,7 +406,7 @@ function UseCaseWidget({ drill, vsPlan }: { drill: DrillData; vsPlan: boolean })
               </div>
               {vsPlan && (
                 <div className="col-span-1 text-right">
-                  <span className="text-[11px] font-semibold text-sky-500 tabular-nums">${uc.plan}M</span>
+                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>${uc.plan}M</span>
                 </div>
               )}
             </div>
@@ -341,10 +438,11 @@ function WidgetSkeleton() {
 // ── Main tab ──────────────────────────────────────────────────────────────────
 
 export function OverviewTab() {
-  const [period,    setPeriod]    = useState<Period>('YTD')
-  const [vsPlan,    setVsPlan]    = useState(false)
-  const [drillView, setDrillView] = useState<DrillView>('category')
-  const [exporting, setExporting] = useState(false)
+  const [period,      setPeriod]      = useState<Period>('YTD')
+  const [vsPlan,      setVsPlan]      = useState(false)
+  const [drillView,   setDrillView]   = useState<DrillView>('category')
+  const [exporting,   setExporting]   = useState(false)
+  const [selectedKpi, setSelectedKpi] = useState<string>('ai-cost')
 
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['overview', period],
@@ -353,9 +451,10 @@ export function OverviewTab() {
     placeholderData: (prev) => prev,
   })
 
-  const tileVals  = data?.kpis
-  const drill     = data?.investment
-  const costVal   = tileVals?.[3]?.value ?? '…'
+  const tileVals     = data?.kpis
+  const drill        = data?.investment
+  const kpiBreakdown = data?.kpiBreakdown
+  const costVal      = tileVals?.[0]?.value ?? '…'
   const costLabel = `Where the ${costVal} is going`
 
   async function handleExport() {
@@ -442,47 +541,64 @@ export function OverviewTab() {
         {isLoading || !tileVals
           ? TILE_META.map(m => <KpiCardSkeleton key={m.id} />)
           : TILE_META.map((meta, i) => (
-              <KpiCard key={meta.id} meta={meta} val={tileVals[i]} period={period} vsPlan={vsPlan} />
+              <KpiCard
+                key={meta.id} meta={meta} val={tileVals[i]} period={period} vsPlan={vsPlan}
+                isSelected={selectedKpi === meta.id}
+                onClick={() => setSelectedKpi(meta.id)}
+              />
             ))
         }
       </div>
 
       {/* ── Lower section ─────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div className="flex items-end justify-between px-1">
-          <div>
-            <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">AI Investment Breakdown</p>
-            <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{costLabel}</h2>
-          </div>
-          <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
-            {DRILL_VIEWS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setDrillView(key)}
-                className={clsx(
-                  'px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 tracking-wide',
-                  drillView === key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {(() => {
+        const isSpendView = selectedKpi === 'ai-cost'
+        const kpiDrill    = !isSpendView ? kpiBreakdown?.[selectedKpi as 'revenue' | 'nps' | 'efficiency'] ?? null : null
+        const unit        = selectedKpi === 'nps' ? 'pts' : isSpendView ? '$M' : '%'
+        const sectionHeading = isSpendView ? 'AI Investment Breakdown' :
+          selectedKpi === 'revenue'    ? 'Revenue Growth Breakdown'   :
+          selectedKpi === 'nps'        ? 'NPS Improvement Breakdown'  : 'Efficiency Gain Breakdown'
+        const sectionSubheading = isSpendView ? costLabel :
+          selectedKpi === 'revenue'    ? '% revenue growth by initiative'    :
+          selectedKpi === 'nps'        ? 'NPS improvement points by initiative' : '% efficiency gain by initiative'
+        return (
+          <div className="space-y-3">
+            <div className="flex items-end justify-between px-1">
+              <div>
+                <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
+                <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
+              </div>
+              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
+                {DRILL_VIEWS.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setDrillView(key)}
+                    className={clsx(
+                      'px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 tracking-wide',
+                      drillView === key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="grid grid-cols-5 gap-4">
-          {isLoading || !drill
-            ? <>
-                <div className="col-span-2"><WidgetSkeleton /></div>
-                <div className="col-span-3"><WidgetSkeleton /></div>
-              </>
-            : <>
-                <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} costLabel={costLabel} />
-                <UseCaseWidget  drill={drill} vsPlan={vsPlan} />
-              </>
-          }
-        </div>
-      </div>
+            <div className="grid grid-cols-2 gap-4">
+              {isLoading || !drill
+                ? <>
+                    <div className="col-span-1"><WidgetSkeleton /></div>
+                    <div className="col-span-1"><WidgetSkeleton /></div>
+                  </>
+                : <>
+                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                  </>
+              }
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
