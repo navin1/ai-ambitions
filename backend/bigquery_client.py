@@ -194,7 +194,7 @@ def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
         SELECT kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_breakdown_v`
         WHERE period = '{period}'
-        ORDER BY kpi_id, dimension_type, COALESCE(display_rank, 999), actual_value DESC
+        ORDER BY kpi_id, dimension_type, actual_value DESC
     """
     return _run_raw(sql, creds)
 
@@ -206,7 +206,7 @@ def fetch_investment(period: str, creds) -> list[dict]:
         SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, description, csg, functional_area
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_investment_breakdown_v`
         WHERE period = '{period}'
-        ORDER BY dimension_type, COALESCE(display_rank, 999), actual_amount DESC
+        ORDER BY dimension_type, actual_amount DESC
     """
     return _run_raw(sql, creds)
 

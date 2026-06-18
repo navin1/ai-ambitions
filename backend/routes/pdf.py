@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from schemas import PDFRequest
-import gemini_client
 
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets')
 
@@ -272,16 +271,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     for idx, w in enumerate(widgets):
         widget_title = w.get('title', '')
         chart_type = w.get('chart_type', 'table')
-        description = w.get('ai_description', '')
         data = w.get('data', [])
-
-        if not description and data:
-            try:
-                description = gemini_client.generate_pdf_description(
-                    widget_title, chart_type, json.dumps(data[:5], default=str)
-                )
-            except Exception:
-                description = 'Analysis based on spend data.'
 
         cfg = _build_chartjs_config(w)
         chart_id = f'chart_{idx}'
@@ -292,10 +282,6 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
             chart_html = f'<div class="chart-wrap {aspect}"><canvas id="{chart_id}"></canvas></div>'
 
         table_html = _build_table_html(data)
-        insight_html = (
-            f'<div class="insight"><span class="insight-label">AI Insight</span><p>{description}</p></div>'
-            if description else ''
-        )
 
         sections += f'''
   <div class="widget-section">
@@ -305,7 +291,6 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     </div>
     <div class="widget-body">
       {chart_html}
-      {insight_html}
       {table_html}
     </div>
   </div>'''
@@ -407,11 +392,6 @@ body {{ font-family:'Inter','Segoe UI',Arial,sans-serif; font-size:10pt; color:#
 .chart-wide {{ width:40%; height:240px; margin-left:50px; }}
 .chart-sq   {{ width:32%; height:240px; margin-left:50px; }}
 canvas {{ display:block; }}
-
-/* ── AI Insight ───────────────────────────── */
-.insight {{ background:#FFF5F5; border-left:3px solid #EF4444; padding:10px 14px; border-radius:0 6px 6px 0; margin-bottom:16px; }}
-.insight-label {{ display:block; font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#DC2626; margin-bottom:4px; }}
-.insight p {{ font-size:9pt; color:#334155; line-height:1.65; }}
 
 /* ── Data table ───────────────────────────── */
 .data-table {{ border:1px solid #E2E8F0; border-radius:6px; overflow:hidden; }}

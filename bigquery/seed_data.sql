@@ -353,47 +353,55 @@ VALUES
 
 
 -- ── 4. ai_amb_use_case_metric (6 use cases × 5 periods = 30 rows) ────────────
--- Non-primary KPI metrics are 0.0 — only the kpi_tag metric carries real values.
+-- All KPI metrics populated for every use case.
+-- Primary KPI (per kpi_tag) carries the dominant value; cross-KPI values
+-- reflect secondary contributions (e.g. a returns bot also drives efficiency).
 
 INSERT INTO `ai_ambitions.ai_amb_use_case_metric`
   (period, use_case_name, cost_actual, cost_plan, revenue_actual, revenue_plan, nps_actual, nps_plan, efficiency_actual, efficiency_plan, update_ts)
 VALUES
   -- ── YTD ──────────────────────────────────────────────────────────────────
-  ('YTD', 'Personalized Search & Discovery',  6.8, 7.5, 1.8, 2.0, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('YTD', 'Demand Forecast v3',               4.8, 5.0, 0.0, 0.0, 0.0, 0.0, 8.5,  10.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'Dynamic Markdown Optimization',    4.2, 4.5, 1.2, 1.5, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('YTD', 'Warehouse Slotting AI',            3.6, 4.0, 0.0, 0.0, 0.0, 0.0, 6.2,  8.0,  CURRENT_TIMESTAMP()),
-  ('YTD', 'Conversational Returns Assistant', 3.2, 3.5, 0.0, 0.0, 1.4, 1.5, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('YTD', 'Chat Triage & Routing',            2.4, 2.5, 0.0, 0.0, 0.8, 1.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
+  -- Personalized Search: primary REVENUE; secondary NPS (happier discovery) + EFFICIENCY (fewer failed searches)
+  ('YTD', 'Personalized Search & Discovery',  6.8, 7.5, 1.8, 2.0, 0.3, 0.4, 0.5,  0.5,  CURRENT_TIMESTAMP()),
+  -- Demand Forecast: primary EFFICIENCY; secondary REVENUE (better availability → fewer lost sales)
+  ('YTD', 'Demand Forecast v3',               4.8, 5.0, 0.3, 0.3, 0.1, 0.1, 8.5,  10.0, CURRENT_TIMESTAMP()),
+  -- Dynamic Markdown: primary REVENUE; secondary EFFICIENCY (faster inventory turn)
+  ('YTD', 'Dynamic Markdown Optimization',    4.2, 4.5, 1.2, 1.5, 0.1, 0.2, 1.0,  1.0,  CURRENT_TIMESTAMP()),
+  -- Warehouse Slotting: primary EFFICIENCY; secondary NPS (faster delivery) + REVENUE (fewer stock-outs)
+  ('YTD', 'Warehouse Slotting AI',            3.6, 4.0, 0.2, 0.2, 0.2, 0.3, 6.2,  8.0,  CURRENT_TIMESTAMP()),
+  -- Conv Returns: primary NPS; secondary REVENUE (retention) + EFFICIENCY (agent deflection)
+  ('YTD', 'Conversational Returns Assistant', 3.2, 3.5, 0.3, 0.3, 1.4, 1.5, 2.0,  2.0,  CURRENT_TIMESTAMP()),
+  -- Chat Triage: primary NPS; secondary EFFICIENCY (lower handle time)
+  ('YTD', 'Chat Triage & Routing',            2.4, 2.5, 0.1, 0.1, 0.8, 1.0, 1.5,  1.5,  CURRENT_TIMESTAMP()),
 
   -- ── Q1 ───────────────────────────────────────────────────────────────────
-  ('Q1',  'Personalized Search & Discovery',  1.5, 1.9, 0.8, 1.0, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q1',  'Demand Forecast v3',               1.1, 1.2, 0.0, 0.0, 0.0, 0.0, 3.5,  4.0,  CURRENT_TIMESTAMP()),
-  ('Q1',  'Dynamic Markdown Optimization',    0.9, 1.1, 0.5, 0.6, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q1',  'Warehouse Slotting AI',            0.8, 1.0, 0.0, 0.0, 0.0, 0.0, 2.5,  3.0,  CURRENT_TIMESTAMP()),
-  ('Q1',  'Conversational Returns Assistant', 0.7, 0.9, 0.0, 0.0, 0.5, 0.6, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q1',  'Chat Triage & Routing',            0.5, 0.5, 0.0, 0.0, 0.3, 0.4, 0.0,  0.0,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Personalized Search & Discovery',  1.5, 1.9, 0.8, 1.0, 0.1, 0.1, 0.1,  0.1,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Demand Forecast v3',               1.1, 1.2, 0.1, 0.1, 0.0, 0.0, 3.5,  4.0,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Dynamic Markdown Optimization',    0.9, 1.1, 0.5, 0.6, 0.0, 0.1, 0.2,  0.2,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Warehouse Slotting AI',            0.8, 1.0, 0.1, 0.1, 0.1, 0.1, 2.5,  3.0,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Conversational Returns Assistant', 0.7, 0.9, 0.1, 0.1, 0.5, 0.6, 0.5,  0.5,  CURRENT_TIMESTAMP()),
+  ('Q1',  'Chat Triage & Routing',            0.5, 0.5, 0.0, 0.0, 0.3, 0.4, 0.3,  0.3,  CURRENT_TIMESTAMP()),
 
   -- ── Q2 ───────────────────────────────────────────────────────────────────
-  ('Q2',  'Personalized Search & Discovery',  1.8, 1.9, 1.0, 1.0, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q2',  'Demand Forecast v3',               1.3, 1.2, 0.0, 0.0, 0.0, 0.0, 5.0,  5.5,  CURRENT_TIMESTAMP()),
-  ('Q2',  'Dynamic Markdown Optimization',    1.1, 1.1, 0.7, 0.7, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q2',  'Warehouse Slotting AI',            1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 3.8,  4.2,  CURRENT_TIMESTAMP()),
-  ('Q2',  'Conversational Returns Assistant', 0.9, 0.9, 0.0, 0.0, 0.7, 0.7, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q2',  'Chat Triage & Routing',            0.7, 0.6, 0.0, 0.0, 0.4, 0.4, 0.0,  0.0,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Personalized Search & Discovery',  1.8, 1.9, 1.0, 1.0, 0.1, 0.1, 0.1,  0.1,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Demand Forecast v3',               1.3, 1.2, 0.1, 0.1, 0.0, 0.0, 5.0,  5.5,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Dynamic Markdown Optimization',    1.1, 1.1, 0.7, 0.7, 0.0, 0.1, 0.3,  0.3,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Warehouse Slotting AI',            1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 3.8,  4.2,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Conversational Returns Assistant', 0.9, 0.9, 0.1, 0.1, 0.7, 0.7, 0.5,  0.5,  CURRENT_TIMESTAMP()),
+  ('Q2',  'Chat Triage & Routing',            0.7, 0.6, 0.0, 0.0, 0.4, 0.4, 0.4,  0.4,  CURRENT_TIMESTAMP()),
 
   -- ── Q3 ───────────────────────────────────────────────────────────────────
-  ('Q3',  'Personalized Search & Discovery',  2.2, 1.9, 1.2, 1.0, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q3',  'Demand Forecast v3',               1.6, 1.2, 0.0, 0.0, 0.0, 0.0, 6.5,  6.0,  CURRENT_TIMESTAMP()),
-  ('Q3',  'Dynamic Markdown Optimization',    1.3, 1.1, 0.9, 0.8, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q3',  'Warehouse Slotting AI',            1.1, 1.0, 0.0, 0.0, 0.0, 0.0, 5.0,  4.8,  CURRENT_TIMESTAMP()),
-  ('Q3',  'Conversational Returns Assistant', 1.0, 0.9, 0.0, 0.0, 0.8, 0.7, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q3',  'Chat Triage & Routing',            0.8, 0.6, 0.0, 0.0, 0.5, 0.4, 0.0,  0.0,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Personalized Search & Discovery',  2.2, 1.9, 1.2, 1.0, 0.1, 0.1, 0.2,  0.1,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Demand Forecast v3',               1.6, 1.2, 0.1, 0.1, 0.0, 0.0, 6.5,  6.0,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Dynamic Markdown Optimization',    1.3, 1.1, 0.9, 0.8, 0.0, 0.1, 0.3,  0.3,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Warehouse Slotting AI',            1.1, 1.0, 0.0, 0.1, 0.1, 0.1, 5.0,  4.8,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Conversational Returns Assistant', 1.0, 0.9, 0.1, 0.1, 0.8, 0.7, 0.6,  0.5,  CURRENT_TIMESTAMP()),
+  ('Q3',  'Chat Triage & Routing',            0.8, 0.6, 0.0, 0.0, 0.5, 0.4, 0.4,  0.3,  CURRENT_TIMESTAMP()),
 
   -- ── Q4 ───────────────────────────────────────────────────────────────────
-  ('Q4',  'Personalized Search & Discovery',  1.3, 1.9, 0.6, 1.0, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q4',  'Demand Forecast v3',               0.8, 1.2, 0.0, 0.0, 0.0, 0.0, 2.5,  5.0,  CURRENT_TIMESTAMP()),
-  ('Q4',  'Dynamic Markdown Optimization',    0.9, 1.1, 0.4, 0.8, 0.0, 0.0, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q4',  'Warehouse Slotting AI',            0.7, 1.0, 0.0, 0.0, 0.0, 0.0, 1.8,  4.0,  CURRENT_TIMESTAMP()),
-  ('Q4',  'Conversational Returns Assistant', 0.6, 0.9, 0.0, 0.0, 0.4, 0.6, 0.0,  0.0,  CURRENT_TIMESTAMP()),
-  ('Q4',  'Chat Triage & Routing',            0.2, 0.5, 0.0, 0.0, 0.2, 0.4, 0.0,  0.0,  CURRENT_TIMESTAMP());
+  ('Q4',  'Personalized Search & Discovery',  1.3, 1.9, 0.6, 1.0, 0.1, 0.1, 0.1,  0.2,  CURRENT_TIMESTAMP()),
+  ('Q4',  'Demand Forecast v3',               0.8, 1.2, 0.0, 0.1, 0.0, 0.0, 2.5,  5.0,  CURRENT_TIMESTAMP()),
+  ('Q4',  'Dynamic Markdown Optimization',    0.9, 1.1, 0.4, 0.8, 0.0, 0.1, 0.2,  0.3,  CURRENT_TIMESTAMP()),
+  ('Q4',  'Warehouse Slotting AI',            0.7, 1.0, 0.0, 0.1, 0.0, 0.1, 1.8,  4.0,  CURRENT_TIMESTAMP()),
+  ('Q4',  'Conversational Returns Assistant', 0.6, 0.9, 0.1, 0.1, 0.4, 0.6, 0.5,  0.5,  CURRENT_TIMESTAMP()),
+  ('Q4',  'Chat Triage & Routing',            0.2, 0.5, 0.0, 0.0, 0.2, 0.4, 0.2,  0.3,  CURRENT_TIMESTAMP());

@@ -169,7 +169,7 @@ WHERE metric_id IN ('revenue', 'nps', 'efficiency')
 
 UNION ALL
 
--- Revenue use-case rows (use cases tagged REVENUE)
+-- Revenue use-case rows (all use cases, ranked by their revenue contribution)
 SELECT
   ucm.period,
   'revenue'          AS kpi_id,
@@ -181,11 +181,10 @@ SELECT
 FROM `ai_ambitions.ai_amb_use_cases` uc
 JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
   ON uc.use_case_name = ucm.use_case_name
-WHERE uc.kpi_tag = 'REVENUE'
 
 UNION ALL
 
--- NPS use-case rows (use cases tagged NPS)
+-- NPS use-case rows (all use cases, ranked by their NPS contribution)
 SELECT
   ucm.period,
   'nps'              AS kpi_id,
@@ -197,11 +196,10 @@ SELECT
 FROM `ai_ambitions.ai_amb_use_cases` uc
 JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
   ON uc.use_case_name = ucm.use_case_name
-WHERE uc.kpi_tag = 'NPS'
 
 UNION ALL
 
--- Efficiency use-case rows (use cases tagged EFFICIENCY)
+-- Efficiency use-case rows (all use cases, ranked by their efficiency contribution)
 SELECT
   ucm.period,
   'efficiency'       AS kpi_id,
@@ -212,5 +210,4 @@ SELECT
   uc.display_rank
 FROM `ai_ambitions.ai_amb_use_cases` uc
 JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
-  ON uc.use_case_name = ucm.use_case_name
-WHERE uc.kpi_tag = 'EFFICIENCY';
+  ON uc.use_case_name = ucm.use_case_name;
