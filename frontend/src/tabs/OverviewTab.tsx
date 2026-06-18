@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Download } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -255,10 +255,43 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M' }: {
 
 // ── Use case table widget ─────────────────────────────────────────────────────
 
+function DescriptionPopover({ text }: { text: string }) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const hasBullets = lines.some(l => /^[•\-\*]/.test(l))
+  return (
+    <div
+      className="absolute left-0 top-full mt-2 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-xl p-4 max-h-64 overflow-y-auto"
+      onClickCapture={e => e.stopPropagation()}
+    >
+      {hasBullets ? (
+        <ul className="space-y-2">
+          {lines.map((line, i) => (
+            <li key={i} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
+              <span className="text-gray-400 flex-shrink-0 mt-px">•</span>
+              <span>{line.replace(/^[•\-\*]\s*/, '')}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{text}</p>
+      )}
+    </div>
+  )
+}
+
 function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
   drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string
 }) {
-  // Description lookup for kpi-metric mode (tooltip still works via name match)
+  const [openPopover, setOpenPopover] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!openPopover) return
+    function close() { setOpenPopover(null) }
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [openPopover])
+
+  // Description lookup for kpi-metric mode
   const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
 
   if (kpiDrill) {
@@ -299,13 +332,12 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
                   <span className="text-xs font-black font-mono text-gray-300">{uc.rank ?? String(i + 1).padStart(2, '0')}</span>
                 </div>
                 <div className="col-span-7 pr-2">
-                  <div className="relative group inline-block">
-                    <span className="text-sm font-semibold text-gray-800 leading-snug cursor-default">{uc.label}</span>
-                    {desc && (
-                      <div className="absolute left-0 top-full mt-1.5 z-50 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed pointer-events-none">
-                        {desc}
-                      </div>
-                    )}
+                  <div className="relative inline-block">
+                    <span
+                      className={clsx('text-sm font-semibold text-gray-800 leading-snug', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
+                    >{uc.label}</span>
+                    {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
                   </div>
                 </div>
                 <div className="col-span-2 pr-2">
@@ -374,13 +406,12 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
                 <span className="text-xs font-black font-mono text-gray-300">{uc.rank}</span>
               </div>
               <div className="col-span-5 pr-2">
-                <div className="relative group inline-block">
-                  <span className="text-sm font-semibold text-gray-800 leading-snug cursor-default">{uc.name}</span>
-                  {uc.description && (
-                    <div className="absolute left-0 top-full mt-1.5 z-50 hidden group-hover:block w-64 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg leading-relaxed pointer-events-none">
-                      {uc.description}
-                    </div>
-                  )}
+                <div className="relative inline-block">
+                  <span
+                    className={clsx('text-sm font-semibold text-gray-800 leading-snug', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                    onClick={e => { if (!uc.description) return; e.stopPropagation(); setOpenPopover(openPopover === uc.name ? null : uc.name) }}
+                  >{uc.name}</span>
+                  {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
                 </div>
               </div>
               <div className="col-span-2">
@@ -584,19 +615,15 @@ export function OverviewTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               {isLoading || !drill
                 ? <>
-                    <div className="col-span-3"><WidgetSkeleton /></div>
-                    <div className="col-span-2"><WidgetSkeleton /></div>
+                    <div className="col-span-1"><WidgetSkeleton /></div>
+                    <div className="col-span-1"><WidgetSkeleton /></div>
                   </>
                 : <>
-                    <div className="col-span-3">
-                      <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
-                    </div>
-                    <div className="col-span-2">
-                      <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
-                    </div>
+                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
                   </>
               }
             </div>
