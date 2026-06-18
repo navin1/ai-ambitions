@@ -184,31 +184,31 @@ function fmtVal(v: number, unit: string): string {
   return `${v.toFixed(1)}%`
 }
 
-function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M' }: {
+function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
   drill: DrillData; view: DrillView; vsPlan: boolean
-  kpiDrill?: KpiDrillData | null; unit?: string
+  kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
 }) {
   const items: Array<{ label: string; amount: number; plan?: number | null }> = kpiDrill
     ? (view === 'category' ? kpiDrill.byCategory : kpiDrill.byVendor).map(i => ({ label: i.label, amount: i.value, plan: i.plan }))
     : view === 'category' ? drill.byCategory : drill.byVendor
 
   const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)))
-  const total  = items.reduce((s, i) => s + i.amount, 0)
 
-  const heading = view === 'category' ? (kpiDrill ? 'By category' : 'Spend by category')
-                                      : (kpiDrill ? 'By vendor'   : 'Spend by vendor')
+  const heading = view === 'category'
+    ? `All ${items.length} categories`
+    : `All ${items.length} vendors`
 
   return (
     <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">{heading}</p>
-          <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(total, unit)} total</p>
+          <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(kpiTotal, unit)} total</p>
         </div>
       </div>
       <div className="space-y-5 flex-1">
         {items.map((item, i) => {
-          const pctOfTotal = ((item.amount / total) * 100).toFixed(0)
+          const pctOfTotal = kpiTotal > 0 ? ((item.amount / kpiTotal) * 100).toFixed(0) : '—'
           const actualW    = `${(item.amount / maxBar) * 100}%`
           const planW      = item.plan ? `${(item.plan / maxBar) * 100}%` : '0%'
           const isOver     = item.plan !== undefined && item.plan !== null && item.amount > item.plan
@@ -237,7 +237,7 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M' }: {
                   style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
                 />
               </div>
-              {!kpiDrill && <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>}
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
             </div>
           )
         })}
@@ -279,8 +279,8 @@ function DescriptionPopover({ text }: { text: string }) {
   )
 }
 
-function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
-  drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string
+function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
+  drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
 
@@ -303,7 +303,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
       <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
           <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
-            Top {items.length} use cases by {unit === 'pts' ? 'NPS impact' : 'metric impact'}
+            All {items.length} use cases — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
           </p>
         </div>
         <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
@@ -355,6 +355,9 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
                   <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
                     {fmtVal(uc.value, unit)}
                   </span>
+                  {kpiTotal > 0 && (
+                    <p className="text-[10px] text-gray-400 font-medium">{((uc.value / kpiTotal) * 100).toFixed(0)}% of total</p>
+                  )}
                 </div>
                 {vsPlan && (
                   <div className="col-span-1 text-right">
@@ -377,7 +380,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
     <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="mb-6">
         <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
-          Top {items.length} use cases by spend
+          All {items.length} use cases — by spend
         </p>
       </div>
       <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
@@ -434,6 +437,9 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M' }: {
                 <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
                   ${uc.amount}M
                 </span>
+                {kpiTotal > 0 && (
+                  <p className="text-[10px] text-gray-400 font-medium">{((uc.amount / kpiTotal) * 100).toFixed(0)}% of total</p>
+                )}
               </div>
               {vsPlan && (
                 <div className="col-span-1 text-right">
@@ -492,7 +498,7 @@ export function OverviewTab() {
     if (!tileVals || !drill || exporting) return
     setExporting(true)
     try {
-      await exportOverviewPDF(period, tileVals, drill, drillView)
+      await exportOverviewPDF(period, tileVals, drill, drillView, selectedKpi, kpiBreakdown)
     } finally {
       setExporting(false)
     }
@@ -622,8 +628,8 @@ export function OverviewTab() {
                     <div className="col-span-1"><WidgetSkeleton /></div>
                   </>
                 : <>
-                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
-                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} kpiTotal={tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0} />
+                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} kpiTotal={tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0} />
                   </>
               }
             </div>
