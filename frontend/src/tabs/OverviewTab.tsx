@@ -584,15 +584,19 @@ export function OverviewTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               {isLoading || !drill
                 ? <>
-                    <div className="col-span-1"><WidgetSkeleton /></div>
-                    <div className="col-span-1"><WidgetSkeleton /></div>
+                    <div className="col-span-3"><WidgetSkeleton /></div>
+                    <div className="col-span-2"><WidgetSkeleton /></div>
                   </>
                 : <>
-                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
-                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    <div className="col-span-3">
+                      <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    </div>
+                    <div className="col-span-2">
+                      <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} />
+                    </div>
                   </>
               }
             </div>

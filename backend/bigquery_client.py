@@ -181,7 +181,7 @@ def fetch_kpi_summary(period: str, creds) -> list[dict]:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
         SELECT kpi_id, actual_value, plan_value, actual_delta, delta_label
-        FROM `{PROJECT_ID}.{DATASET}.ai_ambition_kpi_summary`
+        FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_summary`
         WHERE period = '{period}'
     """
     return _run_raw(sql, creds)
@@ -192,7 +192,7 @@ def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
         SELECT kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank
-        FROM `{PROJECT_ID}.{DATASET}.ai_ambition_kpi_breakdown`
+        FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_breakdown_v`
         WHERE period = '{period}'
         ORDER BY kpi_id, dimension_type, COALESCE(display_rank, 999), actual_value DESC
     """
@@ -204,7 +204,7 @@ def fetch_investment(period: str, creds) -> list[dict]:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
         SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, description, csg, functional_area
-        FROM `{PROJECT_ID}.{DATASET}.ai_ambition_investment`
+        FROM `{PROJECT_ID}.{DATASET}.ai_amb_investment_breakdown_v`
         WHERE period = '{period}'
         ORDER BY dimension_type, COALESCE(display_rank, 999), actual_amount DESC
     """

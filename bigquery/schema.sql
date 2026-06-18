@@ -1,383 +1,216 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- AI Ambitions Dashboard — BigQuery Schema
+-- AI Ambitions Dashboard — BigQuery Schema (clean start)
 -- Dataset: ai_ambitions  (create with: bq mk --dataset PROJECT:ai_ambitions)
+--
+-- Run order:
+--   1. schema.sql   — this file (DROP + CREATE)
+--   2. seed_data.sql — INSERT statements
+--
+-- Each statement must be run individually in the BigQuery console, or
+-- run the whole file as a script via:
+--   bq query --use_legacy_sql=false < schema.sql
+--
+-- Replace `ai_ambitions` with your `project_id.dataset_id` as needed.
+--
+-- Table inventory:
+--   ai_amb_kpi_summary        — headline KPI tiles (period × kpi_id)
+--   ai_amb_dimension_metrics  — spend + KPI contributions by category/vendor
+--                               (metric_id: 'cost' | 'revenue' | 'nps' | 'efficiency')
+--   ai_amb_use_cases          — use case master list (period-independent)
+--   ai_amb_use_case_metric    — all per-use-case metrics per period (wide fact)
+--
+-- View inventory:
+--   ai_amb_investment_breakdown_v  — cost rows + derived use-case spend rows
+--   ai_amb_kpi_breakdown_v         — KPI contribution rows + derived use-case KPI rows
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- ── Table 1: KPI Summary ──────────────────────────────────────────────────────
--- One row per (period, kpi_id).
--- The backend reads actual_value / plan_value and computes status + formatting.
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_kpi_summary` (
-  period        STRING  NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
-  kpi_id        STRING  NOT NULL OPTIONS(description='revenue | nps | efficiency | ai-cost'),
-  actual_value  FLOAT64 NOT NULL OPTIONS(description='Raw metric value (%, pts, or $M depending on kpi_id)'),
-  plan_value    FLOAT64          OPTIONS(description='Planned / budget target in same unit as actual_value'),
-  actual_delta  FLOAT64          OPTIONS(description='Change vs comparison period (positive = improvement)'),
-  delta_label   STRING           OPTIONS(description='Human label for the delta, e.g. "vs Q3" or "vs plan"'),
-  update_ts    TIMESTAMP        OPTIONS(description='Last refresh timestamp')
+
+-- ── 1. Drop views first (views depend on tables) ─────────────────────────────
+
+DROP VIEW IF EXISTS `ai_ambitions.ai_amb_kpi_breakdown_v`;
+DROP VIEW IF EXISTS `ai_ambitions.ai_amb_investment_breakdown_v`;
+
+-- Also drop previous naming convention if running over an older deployment
+DROP VIEW IF EXISTS `ai_ambitions.v_kpi_breakdown`;
+DROP VIEW IF EXISTS `ai_ambitions.v_investment_breakdown`;
+
+
+-- ── 2. Drop tables ────────────────────────────────────────────────────────────
+
+DROP TABLE IF EXISTS `ai_ambitions.ai_amb_use_case_metric`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_amb_use_cases`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_amb_dimension_metrics`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_amb_kpi_summary`;
+
+-- Also drop previous naming convention
+DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_use_case_metrics`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_use_cases`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_kpi_breakdown`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_investment`;
+DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_kpi_summary`;
+
+
+-- ── 3. Create tables ──────────────────────────────────────────────────────────
+
+-- Table: ai_amb_kpi_summary
+-- One row per (period, kpi_id). Source for the four KPI headline tiles.
+CREATE TABLE `ai_ambitions.ai_amb_kpi_summary` (
+  period        STRING   NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
+  kpi_id        STRING   NOT NULL OPTIONS(description='revenue | nps | efficiency | ai-cost'),
+  actual_value  FLOAT64  NOT NULL OPTIONS(description='Raw metric value in display units (%, pts, or $M)'),
+  plan_value    FLOAT64           OPTIONS(description='Planned / budget target in same units as actual_value'),
+  actual_delta  FLOAT64           OPTIONS(description='Change vs comparison period; positive = improvement'),
+  delta_label   STRING            OPTIONS(description='Human label for the delta, e.g. "vs Q3" or "vs plan"'),
+  update_ts     TIMESTAMP         OPTIONS(description='Last refresh timestamp')
 );
 
--- ── Table 2: Investment Breakdown ────────────────────────────────────────────
--- One row per (period, dimension_type, dimension_name).
--- dimension_type controls which drill-down view the row appears in.
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_investment` (
-  period          STRING  NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
-  dimension_type  STRING  NOT NULL OPTIONS(description='category | use_case | vendor'),
-  dimension_name  STRING  NOT NULL OPTIONS(description='Human-readable label for this row'),
-  actual_amount   FLOAT64 NOT NULL OPTIONS(description='Actual spend in $M'),
-  plan_amount     FLOAT64          OPTIONS(description='Planned spend in $M'),
-  kpi_tag         STRING           OPTIONS(description='For use_case rows: REVENUE | NPS | EFFICIENCY'),
-  display_rank    INT64            OPTIONS(description='For use_case rows: sort order (1-based)'),
-  update_ts      TIMESTAMP        OPTIONS(description='Last refresh timestamp')
+-- Table: ai_amb_dimension_metrics
+-- Single table for all category/vendor-level metrics across spend and KPIs.
+-- Replaces the former ai_ambition_investment + ai_ambition_kpi_breakdown pair.
+-- metric_id = 'cost'       → actual_value in $M   (investment spend)
+-- metric_id = 'revenue'    → actual_value in %    (revenue growth contribution)
+-- metric_id = 'nps'        → actual_value in pts  (NPS improvement contribution)
+-- metric_id = 'efficiency' → actual_value in %    (efficiency gain contribution)
+CREATE TABLE `ai_ambitions.ai_amb_dimension_metrics` (
+  period          STRING   NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
+  metric_id       STRING   NOT NULL OPTIONS(description='cost | revenue | nps | efficiency'),
+  dimension_type  STRING   NOT NULL OPTIONS(description='category | vendor'),
+  dimension_name  STRING   NOT NULL OPTIONS(description='Human-readable label for this row'),
+  actual_value    FLOAT64  NOT NULL OPTIONS(description='Metric value in units defined by metric_id'),
+  plan_value      FLOAT64           OPTIONS(description='Planned value in same units as actual_value'),
+  update_ts       TIMESTAMP         OPTIONS(description='Last refresh timestamp')
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Seed data — mirrors the values previously hardcoded in AIAmbitionTab.tsx
--- Replace with your actual data when connecting to real sources.
--- ─────────────────────────────────────────────────────────────────────────────
-
--- ── ai_ambition_kpi_summary seed ─────────────────────────────────────────────
-
-INSERT INTO `ai_ambitions.ai_ambition_kpi_summary`
-  (period, kpi_id, actual_value, plan_value, actual_delta, delta_label, update_ts)
-VALUES
-  -- YTD
-  ('YTD', 'revenue',    4.6,  5.0,   0.4,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('YTD', 'nps',        2.7,  3.0,   0.3,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 27.0, 33.0,  5.0,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('YTD', 'ai-cost',   42.3, 45.0,  -2.7,  'vs plan', CURRENT_TIMESTAMP()),
-  -- Q1
-  ('Q1',  'revenue',    3.8,  4.0,   0.2,  "vs Q4'25", CURRENT_TIMESTAMP()),
-  ('Q1',  'nps',        2.4,  2.5,   0.1,  "vs Q4'25", CURRENT_TIMESTAMP()),
-  ('Q1',  'efficiency', 18.0, 25.0,  2.0,  "vs Q4'25", CURRENT_TIMESTAMP()),
-  ('Q1',  'ai-cost',    9.8, 11.25, -1.5,  'vs plan',  CURRENT_TIMESTAMP()),
-  -- Q2
-  ('Q2',  'revenue',    5.1,  5.0,   1.3,  'vs Q1',   CURRENT_TIMESTAMP()),
-  ('Q2',  'nps',        2.8,  3.0,   0.4,  'vs Q1',   CURRENT_TIMESTAMP()),
-  ('Q2',  'efficiency', 29.0, 32.0, 11.0,  'vs Q1',   CURRENT_TIMESTAMP()),
-  ('Q2',  'ai-cost',   11.2, 11.25, -0.1,  'vs plan', CURRENT_TIMESTAMP()),
-  -- Q3
-  ('Q3',  'revenue',    4.9,  5.0,  -0.2,  'vs Q2',   CURRENT_TIMESTAMP()),
-  ('Q3',  'nps',        2.9,  3.0,   0.1,  'vs Q2',   CURRENT_TIMESTAMP()),
-  ('Q3',  'efficiency', 31.0, 32.0,  2.0,  'vs Q2',   CURRENT_TIMESTAMP()),
-  ('Q3',  'ai-cost',   13.8, 11.25,  2.6,  'vs plan', CURRENT_TIMESTAMP()),
-  -- Q4
-  ('Q4',  'revenue',    5.2,  5.0,   0.3,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('Q4',  'nps',        3.1,  3.0,   0.2,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('Q4',  'efficiency', 35.0, 35.0,  4.0,  'vs Q3',   CURRENT_TIMESTAMP()),
-  ('Q4',  'ai-cost',    7.5, 11.25, -3.75, 'vs plan', CURRENT_TIMESTAMP());
-
--- ── ai_ambition_investment seed ───────────────────────────────────────────────
-
-INSERT INTO `ai_ambitions.ai_ambition_investment`
-  (period, dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, update_ts)
-VALUES
-  -- YTD › category
-  ('YTD', 'category', 'Foundation model inference', 18.2, 20.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'category', 'Cloud compute & storage',    11.4, 12.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'category', 'Data labeling & ops',         5.6,  6.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'category', 'Platform & MLOps tooling',    4.1,  4.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'category', 'Talent allocation',            3.0,  2.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  -- YTD › use_case
-  ('YTD', 'use_case', 'Personalized Search & Discovery',  6.8, 7.5, 'REVENUE',    1, CURRENT_TIMESTAMP()),
-  ('YTD', 'use_case', 'Demand Forecast v3',               4.8, 5.0, 'EFFICIENCY', 2, CURRENT_TIMESTAMP()),
-  ('YTD', 'use_case', 'Dynamic Markdown Optimization',    4.2, 4.5, 'REVENUE',    3, CURRENT_TIMESTAMP()),
-  ('YTD', 'use_case', 'Warehouse Slotting AI',            3.6, 4.0, 'EFFICIENCY', 4, CURRENT_TIMESTAMP()),
-  ('YTD', 'use_case', 'Conversational Returns Assistant', 3.2, 3.5, 'NPS',        5, CURRENT_TIMESTAMP()),
-  ('YTD', 'use_case', 'Chat Triage & Routing',            2.4, 2.5, 'NPS',        6, CURRENT_TIMESTAMP()),
-  -- YTD › vendor
-  ('YTD', 'vendor', 'Google Cloud (Vertex AI)', 14.1, 15.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'vendor', 'OpenAI / Azure OpenAI',    9.7, 10.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'vendor', 'AWS Bedrock',               7.5,  8.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'vendor', 'Scale AI (labeling)',        5.6,  6.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'vendor', 'Databricks',                3.2,  3.5, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'vendor', 'Other vendors',             2.2,  2.0, NULL, NULL, CURRENT_TIMESTAMP()),
-
-  -- Q1 › category
-  ('Q1', 'category', 'Foundation model inference', 4.2, 5.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'category', 'Cloud compute & storage',    2.5, 3.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'category', 'Data labeling & ops',         1.3, 1.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'category', 'Platform & MLOps tooling',    1.1, 1.1,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'category', 'Talent allocation',            0.7, 0.65, NULL, NULL, CURRENT_TIMESTAMP()),
-  -- Q1 › use_case
-  ('Q1', 'use_case', 'Personalized Search & Discovery',  1.5, 1.9, 'REVENUE',    1, CURRENT_TIMESTAMP()),
-  ('Q1', 'use_case', 'Demand Forecast v3',               1.1, 1.2, 'EFFICIENCY', 2, CURRENT_TIMESTAMP()),
-  ('Q1', 'use_case', 'Dynamic Markdown Optimization',    0.9, 1.1, 'REVENUE',    3, CURRENT_TIMESTAMP()),
-  ('Q1', 'use_case', 'Warehouse Slotting AI',            0.8, 1.0, 'EFFICIENCY', 4, CURRENT_TIMESTAMP()),
-  ('Q1', 'use_case', 'Conversational Returns Assistant', 0.7, 0.9, 'NPS',        5, CURRENT_TIMESTAMP()),
-  -- Q1 › vendor
-  ('Q1', 'vendor', 'Google Cloud (Vertex AI)', 3.2, 3.8, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'vendor', 'OpenAI / Azure OpenAI',    2.1, 2.6, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'vendor', 'AWS Bedrock',               1.8, 2.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'vendor', 'Scale AI (labeling)',        1.3, 1.5, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'vendor', 'Databricks',                0.8, 0.9, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'vendor', 'Other vendors',             0.6, 0.5, NULL, NULL, CURRENT_TIMESTAMP()),
-
-  -- Q2 › category
-  ('Q2', 'category', 'Foundation model inference', 4.9, 5.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'category', 'Cloud compute & storage',    2.8, 3.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'category', 'Data labeling & ops',         1.4, 1.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'category', 'Platform & MLOps tooling',    1.2, 1.1,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'category', 'Talent allocation',            0.9, 0.65, NULL, NULL, CURRENT_TIMESTAMP()),
-  -- Q2 › use_case
-  ('Q2', 'use_case', 'Personalized Search & Discovery',  1.8, 1.9, 'REVENUE',    1, CURRENT_TIMESTAMP()),
-  ('Q2', 'use_case', 'Demand Forecast v3',               1.3, 1.2, 'EFFICIENCY', 2, CURRENT_TIMESTAMP()),
-  ('Q2', 'use_case', 'Dynamic Markdown Optimization',    1.1, 1.1, 'REVENUE',    3, CURRENT_TIMESTAMP()),
-  ('Q2', 'use_case', 'Warehouse Slotting AI',            1.0, 1.0, 'EFFICIENCY', 4, CURRENT_TIMESTAMP()),
-  ('Q2', 'use_case', 'Conversational Returns Assistant', 0.9, 0.9, 'NPS',        5, CURRENT_TIMESTAMP()),
-  ('Q2', 'use_case', 'Chat Triage & Routing',            0.7, 0.6, 'NPS',        6, CURRENT_TIMESTAMP()),
-  -- Q2 › vendor
-  ('Q2', 'vendor', 'Google Cloud (Vertex AI)', 3.7, 3.8, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'vendor', 'OpenAI / Azure OpenAI',    2.5, 2.6, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'vendor', 'AWS Bedrock',               2.1, 2.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'vendor', 'Scale AI (labeling)',        1.4, 1.5, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'vendor', 'Databricks',                0.9, 0.9, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'vendor', 'Other vendors',             0.6, 0.5, NULL, NULL, CURRENT_TIMESTAMP()),
-
-  -- Q3 › category
-  ('Q3', 'category', 'Foundation model inference', 5.9, 5.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'category', 'Cloud compute & storage',    3.5, 3.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'category', 'Data labeling & ops',         2.0, 1.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'category', 'Platform & MLOps tooling',    1.5, 1.1,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'category', 'Talent allocation',            0.9, 0.65, NULL, NULL, CURRENT_TIMESTAMP()),
-  -- Q3 › use_case
-  ('Q3', 'use_case', 'Personalized Search & Discovery',  2.2, 1.9, 'REVENUE',    1, CURRENT_TIMESTAMP()),
-  ('Q3', 'use_case', 'Demand Forecast v3',               1.6, 1.2, 'EFFICIENCY', 2, CURRENT_TIMESTAMP()),
-  ('Q3', 'use_case', 'Dynamic Markdown Optimization',    1.3, 1.1, 'REVENUE',    3, CURRENT_TIMESTAMP()),
-  ('Q3', 'use_case', 'Warehouse Slotting AI',            1.1, 1.0, 'EFFICIENCY', 4, CURRENT_TIMESTAMP()),
-  ('Q3', 'use_case', 'Conversational Returns Assistant', 1.0, 0.9, 'NPS',        5, CURRENT_TIMESTAMP()),
-  ('Q3', 'use_case', 'Chat Triage & Routing',            0.8, 0.6, 'NPS',        6, CURRENT_TIMESTAMP()),
-  -- Q3 › vendor
-  ('Q3', 'vendor', 'Google Cloud (Vertex AI)', 4.5, 3.8, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'vendor', 'OpenAI / Azure OpenAI',    3.2, 2.6, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'vendor', 'AWS Bedrock',               2.4, 2.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'vendor', 'Scale AI (labeling)',        1.8, 1.5, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'vendor', 'Databricks',                1.1, 0.9, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'vendor', 'Other vendors',             0.8, 0.5, NULL, NULL, CURRENT_TIMESTAMP()),
-
-  -- Q4 › category
-  ('Q4', 'category', 'Foundation model inference', 3.2, 5.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'category', 'Cloud compute & storage',    1.9, 3.0,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'category', 'Data labeling & ops',         0.9, 1.5,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'category', 'Platform & MLOps tooling',    0.9, 1.1,  NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'category', 'Talent allocation',            0.6, 0.65, NULL, NULL, CURRENT_TIMESTAMP()),
-  -- Q4 › use_case
-  ('Q4', 'use_case', 'Personalized Search & Discovery',  1.3, 1.9, 'REVENUE',    1, CURRENT_TIMESTAMP()),
-  ('Q4', 'use_case', 'Dynamic Markdown Optimization',    0.9, 1.1, 'REVENUE',    2, CURRENT_TIMESTAMP()),
-  ('Q4', 'use_case', 'Demand Forecast v3',               0.8, 1.2, 'EFFICIENCY', 3, CURRENT_TIMESTAMP()),
-  ('Q4', 'use_case', 'Warehouse Slotting AI',            0.7, 1.0, 'EFFICIENCY', 4, CURRENT_TIMESTAMP()),
-  ('Q4', 'use_case', 'Conversational Returns Assistant', 0.6, 0.9, 'NPS',        5, CURRENT_TIMESTAMP()),
-  -- Q4 › vendor
-  ('Q4', 'vendor', 'Google Cloud (Vertex AI)', 2.5, 3.8, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'vendor', 'OpenAI / Azure OpenAI',    1.6, 2.6, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'vendor', 'AWS Bedrock',               1.3, 2.0, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'vendor', 'Scale AI (labeling)',        1.0, 1.5, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'vendor', 'Databricks',                0.6, 0.9, NULL, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'vendor', 'Other vendors',             0.5, 0.5, NULL, NULL, CURRENT_TIMESTAMP());
-
--- ── Table 3: KPI Metric Breakdown ────────────────────────────────────────────
--- One row per (period, kpi_id, dimension_type, dimension_name).
--- Stores the actual KPI metric contribution per dimension — NOT spend.
--- Units: revenue = % growth, nps = improvement points, efficiency = % gain.
--- ─────────────────────────────────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS `ai_ambitions.ai_ambition_kpi_breakdown` (
-  period         STRING  NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
-  kpi_id         STRING  NOT NULL OPTIONS(description='revenue | nps | efficiency'),
-  dimension_type STRING  NOT NULL OPTIONS(description='category | use_case | vendor'),
-  dimension_name STRING  NOT NULL OPTIONS(description='Human-readable label'),
-  actual_value   FLOAT64 NOT NULL OPTIONS(description='Metric contribution in KPI units (%, pts)'),
-  plan_value     FLOAT64          OPTIONS(description='Planned metric contribution'),
-  display_rank   INT64            OPTIONS(description='Sort order for use_case rows'),
-  update_ts      TIMESTAMP        OPTIONS(description='Last refresh timestamp')
+-- Table: ai_amb_use_cases
+-- Master list of AI use cases with metadata. Period-independent.
+CREATE TABLE `ai_ambitions.ai_amb_use_cases` (
+  use_case_name   STRING   NOT NULL OPTIONS(description='Unique use case identifier (display name)'),
+  description     STRING            OPTIONS(description='One-sentence description shown on hover in the dashboard'),
+  csg             STRING            OPTIONS(description='Consumer segment group / business unit'),
+  functional_area STRING            OPTIONS(description='Primary function (e.g. Commerce, Supply Chain, CX)'),
+  kpi_tag         STRING   NOT NULL OPTIONS(description='Primary KPI: REVENUE | NPS | EFFICIENCY'),
+  display_rank    INT64             OPTIONS(description='Sort order in the use-case list (1 = highest spend)'),
+  update_ts       TIMESTAMP         OPTIONS(description='Last refresh timestamp')
 );
 
--- ── ai_ambition_kpi_breakdown seed ───────────────────────────────────────────
+-- Table: ai_amb_use_case_metric
+-- All KPI metrics per use case per period in a single wide row.
+-- Stores cost alongside all KPI metrics so each use case has one row per period.
+CREATE TABLE `ai_ambitions.ai_amb_use_case_metric` (
+  period             STRING   NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
+  use_case_name      STRING   NOT NULL OPTIONS(description='Foreign key to ai_amb_use_cases.use_case_name'),
+  cost_actual        FLOAT64           OPTIONS(description='Actual AI spend attributed to this use case ($M)'),
+  cost_plan          FLOAT64           OPTIONS(description='Planned spend ($M)'),
+  revenue_actual     FLOAT64           OPTIONS(description='Revenue growth contribution (%)'),
+  revenue_plan       FLOAT64           OPTIONS(description='Planned revenue growth contribution (%)'),
+  nps_actual         FLOAT64           OPTIONS(description='NPS improvement contribution (pts)'),
+  nps_plan           FLOAT64           OPTIONS(description='Planned NPS contribution (pts)'),
+  efficiency_actual  FLOAT64           OPTIONS(description='Efficiency gain contribution (%)'),
+  efficiency_plan    FLOAT64           OPTIONS(description='Planned efficiency contribution (%)'),
+  update_ts          TIMESTAMP         OPTIONS(description='Last refresh timestamp')
+);
 
-INSERT INTO `ai_ambitions.ai_ambition_kpi_breakdown`
-  (period, kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank, update_ts)
-VALUES
-  -- ── YTD › REVENUE (% growth) ─────────────────────────────────────────────
-  -- by category
-  ('YTD', 'revenue', 'category', 'Foundation model inference', 1.2, 1.5, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Cloud compute & storage',    0.8, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Data labeling & ops',         0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Platform & MLOps tooling',    0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Talent allocation',            0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- by use_case
-  ('YTD', 'revenue', 'use_case', 'Personalized Search & Discovery', 1.8, 2.0, 1, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'use_case', 'Dynamic Markdown Optimization',   1.2, 1.5, 2, CURRENT_TIMESTAMP()),
-  -- by vendor
-  ('YTD', 'revenue', 'vendor', 'Google Cloud (Vertex AI)', 1.1, 1.3, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',    0.9, 1.1, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'AWS Bedrock',               0.6, 0.8, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Scale AI (labeling)',        0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Databricks',                0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── YTD › NPS (improvement points) ──────────────────────────────────────
-  -- by category
-  ('YTD', 'nps', 'category', 'Foundation model inference', 0.9, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Cloud compute & storage',    0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Data labeling & ops',         0.4, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Platform & MLOps tooling',    0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Talent allocation',            0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- by use_case
-  ('YTD', 'nps', 'use_case', 'Conversational Returns Assistant', 1.4, 1.5, 1, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'use_case', 'Chat Triage & Routing',            0.8, 1.0, 2, CURRENT_TIMESTAMP()),
-  -- by vendor
-  ('YTD', 'nps', 'vendor', 'Google Cloud (Vertex AI)', 0.8, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'OpenAI / Azure OpenAI',    0.6, 0.7, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'AWS Bedrock',               0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Scale AI (labeling)',        0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Databricks',                0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── YTD › EFFICIENCY (% gain) ────────────────────────────────────────────
-  -- by category
-  ('YTD', 'efficiency', 'category', 'Foundation model inference', 6.0, 7.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Cloud compute & storage',    3.5, 4.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Data labeling & ops',         2.5, 3.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Platform & MLOps tooling',    1.7, 2.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Talent allocation',            1.0, 1.5, NULL, CURRENT_TIMESTAMP()),
-  -- by use_case
-  ('YTD', 'efficiency', 'use_case', 'Demand Forecast v3',    8.5, 10.0, 1, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'use_case', 'Warehouse Slotting AI', 6.2,  8.0, 2, CURRENT_TIMESTAMP()),
-  -- by vendor
-  ('YTD', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)', 5.5, 6.5, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',    3.8, 4.5, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'AWS Bedrock',               3.2, 4.0, NULL, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'Databricks',                2.2, 3.0, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q1 › REVENUE ─────────────────────────────────────────────────────────
-  ('Q1', 'revenue', 'category', 'Foundation model inference', 0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'category', 'Cloud compute & storage',    0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'category', 'Data labeling & ops',         0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'category', 'Platform & MLOps tooling',    0.1, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'use_case', 'Personalized Search & Discovery', 0.8, 1.0, 1, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'use_case', 'Dynamic Markdown Optimization',   0.5, 0.6, 2, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'vendor', 'Google Cloud (Vertex AI)', 0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',    0.4, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'revenue', 'vendor', 'AWS Bedrock',               0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q1 › NPS ─────────────────────────────────────────────────────────────
-  ('Q1', 'nps', 'category', 'Foundation model inference', 0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'category', 'Cloud compute & storage',    0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'category', 'Data labeling & ops',         0.1, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'category', 'Platform & MLOps tooling',    0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'use_case', 'Conversational Returns Assistant', 0.5, 0.6, 1, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'use_case', 'Chat Triage & Routing',            0.3, 0.4, 2, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'vendor', 'Google Cloud (Vertex AI)', 0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'vendor', 'OpenAI / Azure OpenAI',    0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'nps', 'vendor', 'AWS Bedrock',               0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q1 › EFFICIENCY ──────────────────────────────────────────────────────
-  ('Q1', 'efficiency', 'category', 'Foundation model inference', 2.5, 3.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'category', 'Cloud compute & storage',    1.5, 1.8, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'category', 'Data labeling & ops',         1.0, 1.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'category', 'Platform & MLOps tooling',    0.7, 0.8, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'category', 'Talent allocation',            0.3, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'use_case', 'Demand Forecast v3',    3.5, 4.0, 1, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'use_case', 'Warehouse Slotting AI', 2.5, 3.0, 2, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)', 2.2, 2.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',    1.5, 1.8, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'vendor', 'AWS Bedrock',               1.2, 1.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q1', 'efficiency', 'vendor', 'Databricks',                0.8, 1.0, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q2 › REVENUE ─────────────────────────────────────────────────────────
-  ('Q2', 'revenue', 'category', 'Foundation model inference', 0.7, 0.7, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'category', 'Cloud compute & storage',    0.4, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'category', 'Data labeling & ops',         0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'category', 'Platform & MLOps tooling',    0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'use_case', 'Personalized Search & Discovery', 1.0, 1.0, 1, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'use_case', 'Dynamic Markdown Optimization',   0.7, 0.7, 2, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'vendor', 'Google Cloud (Vertex AI)', 0.6, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',    0.5, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'revenue', 'vendor', 'AWS Bedrock',               0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q2 › NPS ─────────────────────────────────────────────────────────────
-  ('Q2', 'nps', 'category', 'Foundation model inference', 0.4, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'category', 'Cloud compute & storage',    0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'category', 'Data labeling & ops',         0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'category', 'Platform & MLOps tooling',    0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'use_case', 'Conversational Returns Assistant', 0.7, 0.7, 1, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'use_case', 'Chat Triage & Routing',            0.4, 0.4, 2, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'vendor', 'Google Cloud (Vertex AI)', 0.4, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'vendor', 'OpenAI / Azure OpenAI',    0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'nps', 'vendor', 'AWS Bedrock',               0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q2 › EFFICIENCY ──────────────────────────────────────────────────────
-  ('Q2', 'efficiency', 'category', 'Foundation model inference', 3.2, 3.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'category', 'Cloud compute & storage',    2.0, 2.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'category', 'Data labeling & ops',         1.5, 1.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'category', 'Platform & MLOps tooling',    1.0, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'category', 'Talent allocation',            0.5, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'use_case', 'Demand Forecast v3',    5.0, 5.5, 1, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'use_case', 'Warehouse Slotting AI', 3.8, 4.2, 2, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)', 3.0, 3.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',    2.2, 2.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'vendor', 'AWS Bedrock',               1.8, 2.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q2', 'efficiency', 'vendor', 'Databricks',                1.2, 1.5, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q3 › REVENUE ─────────────────────────────────────────────────────────
-  ('Q3', 'revenue', 'category', 'Foundation model inference', 0.8, 0.7, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'category', 'Cloud compute & storage',    0.5, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'category', 'Data labeling & ops',         0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'category', 'Platform & MLOps tooling',    0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'use_case', 'Personalized Search & Discovery', 1.2, 1.0, 1, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'use_case', 'Dynamic Markdown Optimization',   0.9, 0.8, 2, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'vendor', 'Google Cloud (Vertex AI)', 0.7, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',    0.5, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'revenue', 'vendor', 'AWS Bedrock',               0.4, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q3 › NPS ─────────────────────────────────────────────────────────────
-  ('Q3', 'nps', 'category', 'Foundation model inference', 0.5, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'category', 'Cloud compute & storage',    0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'category', 'Data labeling & ops',         0.2, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'category', 'Platform & MLOps tooling',    0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'use_case', 'Conversational Returns Assistant', 0.8, 0.7, 1, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'use_case', 'Chat Triage & Routing',            0.5, 0.4, 2, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'vendor', 'Google Cloud (Vertex AI)', 0.5, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'vendor', 'OpenAI / Azure OpenAI',    0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'nps', 'vendor', 'AWS Bedrock',               0.3, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q3 › EFFICIENCY ──────────────────────────────────────────────────────
-  ('Q3', 'efficiency', 'category', 'Foundation model inference', 4.0, 3.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'category', 'Cloud compute & storage',    2.5, 2.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'category', 'Data labeling & ops',         1.8, 1.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'category', 'Platform & MLOps tooling',    1.2, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'category', 'Talent allocation',            0.6, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'use_case', 'Demand Forecast v3',    6.5, 6.0, 1, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'use_case', 'Warehouse Slotting AI', 5.0, 4.8, 2, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)', 3.8, 3.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',    2.8, 2.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'vendor', 'AWS Bedrock',               2.2, 2.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q3', 'efficiency', 'vendor', 'Databricks',                1.5, 1.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q4 › REVENUE ─────────────────────────────────────────────────────────
-  ('Q4', 'revenue', 'category', 'Foundation model inference', 0.5, 0.7, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'category', 'Cloud compute & storage',    0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'category', 'Data labeling & ops',         0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'category', 'Platform & MLOps tooling',    0.1, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'use_case', 'Personalized Search & Discovery', 0.6, 1.0, 1, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'use_case', 'Dynamic Markdown Optimization',   0.4, 0.8, 2, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'vendor', 'Google Cloud (Vertex AI)', 0.4, 0.6, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',    0.3, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'revenue', 'vendor', 'AWS Bedrock',               0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q4 › NPS ─────────────────────────────────────────────────────────────
-  ('Q4', 'nps', 'category', 'Foundation model inference', 0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'category', 'Cloud compute & storage',    0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'category', 'Data labeling & ops',         0.1, 0.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'category', 'Platform & MLOps tooling',    0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'category', 'Talent allocation',            0.1, 0.1, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'use_case', 'Conversational Returns Assistant', 0.4, 0.6, 1, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'use_case', 'Chat Triage & Routing',            0.2, 0.4, 2, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'vendor', 'Google Cloud (Vertex AI)', 0.3, 0.4, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'vendor', 'OpenAI / Azure OpenAI',    0.2, 0.3, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'nps', 'vendor', 'AWS Bedrock',               0.1, 0.2, NULL, CURRENT_TIMESTAMP()),
-  -- ── Q4 › EFFICIENCY ──────────────────────────────────────────────────────
-  ('Q4', 'efficiency', 'category', 'Foundation model inference', 2.2, 3.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'category', 'Cloud compute & storage',    1.4, 2.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'category', 'Data labeling & ops',         1.0, 1.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'category', 'Platform & MLOps tooling',    0.7, 1.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'category', 'Talent allocation',            0.3, 0.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'use_case', 'Demand Forecast v3',    2.5, 5.0, 1, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'use_case', 'Warehouse Slotting AI', 1.8, 4.0, 2, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)', 2.0, 3.2, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',    1.5, 2.5, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'vendor', 'AWS Bedrock',               1.0, 2.0, NULL, CURRENT_TIMESTAMP()),
-  ('Q4', 'efficiency', 'vendor', 'Databricks',                0.6, 1.2, NULL, CURRENT_TIMESTAMP());
+
+-- ── 4. Create compatibility views ─────────────────────────────────────────────
+--
+-- These views expose the same column shape the backend already expects,
+-- so no backend query changes are needed when the underlying tables evolve.
+
+-- View: ai_amb_investment_breakdown_v
+-- Combines cost rows from ai_amb_dimension_metrics with use-case rows
+-- derived from ai_amb_use_cases JOIN ai_amb_use_case_metric.
+CREATE OR REPLACE VIEW `ai_ambitions.ai_amb_investment_breakdown_v` AS
+SELECT
+  period,
+  dimension_type,
+  dimension_name,
+  actual_value    AS actual_amount,
+  plan_value      AS plan_amount,
+  CAST(NULL AS STRING) AS kpi_tag,
+  CAST(NULL AS INT64)  AS display_rank,
+  CAST(NULL AS STRING) AS description,
+  CAST(NULL AS STRING) AS csg,
+  CAST(NULL AS STRING) AS functional_area
+FROM `ai_ambitions.ai_amb_dimension_metrics`
+WHERE metric_id = 'cost'
+
+UNION ALL
+
+SELECT
+  ucm.period,
+  'use_case'         AS dimension_type,
+  uc.use_case_name   AS dimension_name,
+  COALESCE(ucm.cost_actual, 0.0) AS actual_amount,
+  ucm.cost_plan      AS plan_amount,
+  uc.kpi_tag,
+  uc.display_rank,
+  uc.description,
+  uc.csg,
+  uc.functional_area
+FROM `ai_ambitions.ai_amb_use_cases` uc
+JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
+  ON uc.use_case_name = ucm.use_case_name;
+
+
+-- View: ai_amb_kpi_breakdown_v
+-- Combines revenue/nps/efficiency rows from ai_amb_dimension_metrics with
+-- per-KPI use-case rows unpivoted from ai_amb_use_case_metric.
+CREATE OR REPLACE VIEW `ai_ambitions.ai_amb_kpi_breakdown_v` AS
+SELECT
+  period,
+  metric_id          AS kpi_id,
+  dimension_type,
+  dimension_name,
+  actual_value,
+  plan_value,
+  CAST(NULL AS INT64) AS display_rank
+FROM `ai_ambitions.ai_amb_dimension_metrics`
+WHERE metric_id IN ('revenue', 'nps', 'efficiency')
+
+UNION ALL
+
+-- Revenue use-case rows (use cases tagged REVENUE)
+SELECT
+  ucm.period,
+  'revenue'          AS kpi_id,
+  'use_case'         AS dimension_type,
+  uc.use_case_name   AS dimension_name,
+  COALESCE(ucm.revenue_actual, 0.0) AS actual_value,
+  ucm.revenue_plan   AS plan_value,
+  uc.display_rank
+FROM `ai_ambitions.ai_amb_use_cases` uc
+JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
+  ON uc.use_case_name = ucm.use_case_name
+WHERE uc.kpi_tag = 'REVENUE'
+
+UNION ALL
+
+-- NPS use-case rows (use cases tagged NPS)
+SELECT
+  ucm.period,
+  'nps'              AS kpi_id,
+  'use_case'         AS dimension_type,
+  uc.use_case_name   AS dimension_name,
+  COALESCE(ucm.nps_actual, 0.0) AS actual_value,
+  ucm.nps_plan       AS plan_value,
+  uc.display_rank
+FROM `ai_ambitions.ai_amb_use_cases` uc
+JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
+  ON uc.use_case_name = ucm.use_case_name
+WHERE uc.kpi_tag = 'NPS'
+
+UNION ALL
+
+-- Efficiency use-case rows (use cases tagged EFFICIENCY)
+SELECT
+  ucm.period,
+  'efficiency'       AS kpi_id,
+  'use_case'         AS dimension_type,
+  uc.use_case_name   AS dimension_name,
+  COALESCE(ucm.efficiency_actual, 0.0) AS actual_value,
+  ucm.efficiency_plan AS plan_value,
+  uc.display_rank
+FROM `ai_ambitions.ai_amb_use_cases` uc
+JOIN `ai_ambitions.ai_amb_use_case_metric` ucm
+  ON uc.use_case_name = ucm.use_case_name
+WHERE uc.kpi_tag = 'EFFICIENCY';
