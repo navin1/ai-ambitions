@@ -176,46 +176,86 @@ function KpiCardSkeleton() {
   )
 }
 
-// ── Bar chart widget ──────────────────────────────────────────────────────────
+// ── Shared widget helpers ─────────────────────────────────────────────────────
 
 function fmtVal(v: number, unit: string): string {
-  if (unit === '$M')  return `$${v.toFixed(1)}M`
-  if (unit === 'pts') return `${v.toFixed(1)} pts`
-  return `${v.toFixed(1)}%`
+  if (unit === '$M')  return `$${v.toFixed(2)}M`
+  if (unit === 'pts') return `${v.toFixed(2)} pts`
+  return `${v.toFixed(2)}%`
 }
+
+function PlanLegend() {
+  return (
+    <div className="mt-5 pt-4 border-t border-gray-50 flex items-center gap-4 text-[11px] font-semibold">
+      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-gray-800 inline-block" /> Actual</span>
+      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-sky-200 inline-block" /> Plan</span>
+      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-rose-400 inline-block" /> Over plan</span>
+    </div>
+  )
+}
+
+function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' | 'desc' }; colKey: string }) {
+  if (sortState.key !== colKey) return null
+  return <span className="text-[9px] text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
+}
+
+// ── Bar chart widget ──────────────────────────────────────────────────────────
 
 function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
   drill: DrillData; view: DrillView; vsPlan: boolean
   kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
 }) {
-  const items: Array<{ label: string; amount: number; plan?: number | null }> = kpiDrill
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
+
+  function handleSort(key: string) {
+    setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+  }
+
+  const rawItems: Array<{ label: string; amount: number; plan?: number | null }> = kpiDrill
     ? (view === 'category' ? kpiDrill.byCategory : kpiDrill.byVendor).map(i => ({ label: i.label, amount: i.value, plan: i.plan }))
     : view === 'category' ? drill.byCategory : drill.byVendor
 
-  const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)))
+  const items = [...rawItems].sort((a, b) => {
+    if (sort.key === 'label') return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
+    if (sort.key === 'value') return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
+    return 0
+  })
 
-  const heading = view === 'category'
-    ? `All ${items.length} categories`
-    : `All ${items.length} vendors`
+  const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)), 1)
+  const heading = view === 'category' ? `All ${items.length} categories` : `All ${items.length} vendors`
 
   return (
-    <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="flex items-start justify-between mb-6">
         <div>
           <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">{heading}</p>
           <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(kpiTotal, unit)} total</p>
         </div>
       </div>
+      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
+        <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+        <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('label')}>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400">
+            {view === 'category' ? 'Category' : 'Vendor'}
+          </span>
+          <SortIcon sortState={sort} colKey="label" />
+        </div>
+        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('value')}>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400">{unit}</span>
+          <SortIcon sortState={sort} colKey="value" />
+        </div>
+      </div>
       <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
         {items.map((item, i) => {
           const pctOfTotal = kpiTotal > 0 ? ((item.amount / kpiTotal) * 100).toFixed(0) : '—'
           const actualW    = `${(item.amount / maxBar) * 100}%`
-          const planW      = item.plan ? `${(item.plan / maxBar) * 100}%` : '0%'
+          const planW      = item.plan != null ? `${(item.plan / maxBar) * 100}%` : '0%'
           const isOver     = item.plan !== undefined && item.plan !== null && item.amount > item.plan
           return (
             <div key={item.label}>
-              <div className="flex justify-between items-baseline mb-2">
-                <span className="text-sm font-semibold text-gray-700 leading-tight pr-4">{item.label}</span>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-sm font-semibold text-gray-700 leading-tight min-w-0 flex-1 truncate" title={item.label}>{item.label}</span>
                 <div className="flex items-center gap-2 shrink-0">
                   {vsPlan && item.plan != null && (
                     <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
@@ -242,13 +282,7 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal =
           )
         })}
       </div>
-      {vsPlan && (
-        <div className="mt-5 pt-4 border-t border-gray-50 flex items-center gap-4 text-[11px] font-semibold">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-gray-800 inline-block" /> Actual</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-sky-200 inline-block" /> Plan</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-rose-400 inline-block" /> Over plan</span>
-        </div>
-      )}
+      {vsPlan && <PlanLegend />}
     </div>
   )
 }
@@ -283,6 +317,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
   drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
+
+  function handleSort(key: string) {
+    setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+  }
 
   useEffect(() => {
     if (!openPopover) return
@@ -291,137 +330,165 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
     return () => document.removeEventListener('click', close)
   }, [openPopover])
 
-  // Description lookup for kpi-metric mode
   const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
 
   if (kpiDrill) {
     // ── KPI metric mode (Revenue / NPS / Efficiency) ───────────────────────
-    const items  = kpiDrill.byUseCase
-    // Fixed columns: rank | name (flexible) | value | [plan]
-    const cols = vsPlan ? '1.5rem 1fr 5.5rem 4rem' : '1.5rem 1fr 5.5rem'
+    const items = [...kpiDrill.byUseCase].sort((a, b) => {
+      if (sort.key === 'label') return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
+      if (sort.key === 'value') return sort.dir === 'asc' ? a.value - b.value : b.value - a.value
+      return 0
+    })
+    const maxBar = Math.max(...items.map(i => Math.max(i.value, i.plan ?? 0)), 1)
+
     return (
-      <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
           <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
             All {items.length} use cases — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
           </p>
         </div>
-        <div className="grid gap-x-3 pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
-          <div className="text-[10px] font-bold tracking-wider text-gray-400">#</div>
-          <div className="text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
-          <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">{unit}</div>
-          {vsPlan && <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
+        <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+          <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('label')}>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400">Use case</span>
+            <SortIcon sortState={sort} colKey="label" />
+          </div>
+          <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('value')}>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400">{unit}</span>
+            <SortIcon sortState={sort} colKey="value" />
+          </div>
         </div>
-        <div className="overflow-y-auto overflow-x-hidden max-h-96 pr-3">
+        <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
           {items.map((uc, i) => {
-            const isOver = uc.plan != null && uc.value > uc.plan
-            const desc   = descByName[uc.label]
+            const isOver     = uc.plan != null && uc.value > uc.plan
+            const desc       = descByName[uc.label]
+            const actualW    = `${(uc.value / maxBar) * 100}%`
+            const planW      = uc.plan != null ? `${(uc.plan / maxBar) * 100}%` : '0%'
+            const pctOfTotal = kpiTotal > 0 ? ((uc.value / kpiTotal) * 100).toFixed(0) : '—'
             return (
-              <div
-                key={uc.label}
-                className={clsx(
-                  'grid gap-x-3 items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
-                  i < items.length - 1 && 'border-b border-gray-50',
-                )}
-                style={{ gridTemplateColumns: cols }}
-              >
-                <div>
-                  <span className="text-xs font-black font-mono text-gray-300">{String(i + 1).padStart(2, '0')}</span>
-                </div>
-                <div className="min-w-0">
-                  <div className="relative inline-block max-w-full">
+              <div key={uc.label}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                  <div className="relative min-w-0 flex-1">
                     <span
-                      className={clsx('text-sm font-semibold text-gray-800 leading-snug break-words', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      title={uc.label}
                       onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
                     >{uc.label}</span>
                     {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
                   </div>
-                </div>
-                <div className="text-right">
-                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
-                    {fmtVal(uc.value, unit)}
-                  </span>
-                  {kpiTotal > 0 && (
-                    <p className="text-[10px] text-gray-400 font-medium">{((uc.value / kpiTotal) * 100).toFixed(0)}% of total</p>
-                  )}
-                </div>
-                {vsPlan && (
-                  <div className="text-right">
-                    <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>{uc.plan != null ? fmtVal(uc.plan, unit) : '—'}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {vsPlan && uc.plan != null && (
+                      <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                        Plan {fmtVal(uc.plan, unit)}
+                      </span>
+                    )}
+                    <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
+                      {fmtVal(uc.value, unit)}
+                    </span>
                   </div>
-                )}
+                </div>
+                <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                  {vsPlan && uc.plan != null && (
+                    <div
+                      className="absolute inset-y-0 left-0 bg-sky-100 rounded-full"
+                      style={{ width: planW, transition: `width 0.5s ease ${i * 60}ms` }}
+                    />
+                  )}
+                  <div
+                    className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                    style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
               </div>
             )
           })}
         </div>
+        {vsPlan && <PlanLegend />}
       </div>
     )
   }
 
   // ── AI Cost mode (spend $M) ────────────────────────────────────────────────
-  const items  = drill.byUseCase
-  // Fixed columns: rank | name (flexible) | kpi-tag | value | [plan]
-  const cols = vsPlan ? '1.5rem 1fr 5rem 5.5rem 4rem' : '1.5rem 1fr 5rem 5.5rem'
+  const items = [...drill.byUseCase].sort((a, b) => {
+    if (sort.key === 'name')   return sort.dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+    if (sort.key === 'amount') return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
+    return 0
+  })
+  const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)), 1)
+
   return (
-    <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="mb-6">
         <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
           All {items.length} use cases — by spend
         </p>
       </div>
-      <div className="grid gap-x-3 pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
-        <div className="text-[10px] font-bold tracking-wider text-gray-400">#</div>
-        <div className="text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
-        <div className="text-[10px] font-bold tracking-wider text-gray-400">KPI</div>
-        <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">$M</div>
-        {vsPlan && <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
+      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
+        <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+        <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('name')}>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400">Use case</span>
+          <SortIcon sortState={sort} colKey="name" />
+        </div>
+        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('amount')}>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400">$M</span>
+          <SortIcon sortState={sort} colKey="amount" />
+        </div>
       </div>
-      <div className="overflow-y-auto overflow-x-hidden max-h-96 pr-3">
+      <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
         {items.map((uc, i) => {
-          const isOver = uc.plan !== undefined && uc.plan !== null && uc.amount > uc.plan
+          const isOver     = uc.plan !== undefined && uc.plan !== null && uc.amount > uc.plan
+          const actualW    = `${(uc.amount / maxBar) * 100}%`
+          const planW      = uc.plan != null ? `${(uc.plan / maxBar) * 100}%` : '0%'
+          const pctOfTotal = kpiTotal > 0 ? ((uc.amount / kpiTotal) * 100).toFixed(0) : '—'
           return (
-            <div
-              key={uc.name}
-              className={clsx(
-                'grid gap-x-3 items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
-                i < items.length - 1 && 'border-b border-gray-50',
-              )}
-              style={{ gridTemplateColumns: cols }}
-            >
-              <div>
-                <span className="text-xs font-black font-mono text-gray-300">{String(i + 1).padStart(2, '0')}</span>
-              </div>
-              <div className="min-w-0">
-                <div className="relative inline-block max-w-full">
-                  <span
-                    className={clsx('text-sm font-semibold text-gray-800 leading-snug break-words', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
-                    onClick={e => { if (!uc.description) return; e.stopPropagation(); setOpenPopover(openPopover === uc.name ? null : uc.name) }}
-                  >{uc.name}</span>
-                  {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
+            <div key={uc.name}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                <div className="min-w-0 flex-1 flex items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <span
+                      className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      title={uc.name}
+                      onClick={e => { if (!uc.description) return; e.stopPropagation(); setOpenPopover(openPopover === uc.name ? null : uc.name) }}
+                    >{uc.name}</span>
+                    {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
+                  </div>
+                  <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0', kpiTag(uc.kpi))}>
+                    {uc.kpi}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {vsPlan && uc.plan != null && (
+                    <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                      Plan {fmtVal(uc.plan, unit)}
+                    </span>
+                  )}
+                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
+                    {fmtVal(uc.amount, unit)}
+                  </span>
                 </div>
               </div>
-              <div>
-                <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', kpiTag(uc.kpi))}>
-                  {uc.kpi}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
-                  ${uc.amount}M
-                </span>
-                {kpiTotal > 0 && (
-                  <p className="text-[10px] text-gray-400 font-medium">{((uc.amount / kpiTotal) * 100).toFixed(0)}% of total</p>
+              <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                {vsPlan && uc.plan != null && (
+                  <div
+                    className="absolute inset-y-0 left-0 bg-sky-100 rounded-full"
+                    style={{ width: planW, transition: `width 0.5s ease ${i * 60}ms` }}
+                  />
                 )}
+                <div
+                  className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                  style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
+                />
               </div>
-              {vsPlan && (
-                <div className="text-right">
-                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>${uc.plan}M</span>
-                </div>
-              )}
+              <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
             </div>
           )
         })}
       </div>
+      {vsPlan && <PlanLegend />}
     </div>
   )
 }
@@ -596,8 +663,8 @@ export function OverviewTab() {
             <div className="grid grid-cols-2 gap-4">
               {isLoading || !drill
                 ? <>
-                    <div className="col-span-1"><WidgetSkeleton /></div>
-                    <div className="col-span-1"><WidgetSkeleton /></div>
+                    <WidgetSkeleton />
+                    <WidgetSkeleton />
                   </>
                 : <>
                     <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} kpiTotal={tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0} />
