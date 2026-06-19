@@ -206,7 +206,7 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal =
           <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(kpiTotal, unit)} total</p>
         </div>
       </div>
-      <div className="space-y-5 overflow-y-auto max-h-96">
+      <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
         {items.map((item, i) => {
           const pctOfTotal = kpiTotal > 0 ? ((item.amount / kpiTotal) * 100).toFixed(0) : '—'
           const actualW    = `${(item.amount / maxBar) * 100}%`
@@ -297,8 +297,8 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
   if (kpiDrill) {
     // ── KPI metric mode (Revenue / NPS / Efficiency) ───────────────────────
     const items  = kpiDrill.byUseCase
-    const maxVal = Math.max(...items.map(u => Math.max(u.value, u.plan ?? 0)))
-    const cols   = vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))'
+    // Fixed columns: rank | name (flexible) | value | [plan]
+    const cols = vsPlan ? '1.5rem 1fr 5.5rem 4rem' : '1.5rem 1fr 5.5rem'
     return (
       <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
@@ -306,52 +306,38 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
             All {items.length} use cases — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
           </p>
         </div>
-        <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
-          <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400">#</div>
-          <div className="col-span-7 text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
-          <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400">Metric</div>
-          <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400 text-right">{unit}</div>
-          {vsPlan && <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
+        <div className="grid gap-x-3 pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
+          <div className="text-[10px] font-bold tracking-wider text-gray-400">#</div>
+          <div className="text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
+          <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">{unit}</div>
+          {vsPlan && <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
         </div>
-        <div className="overflow-y-auto max-h-96">
+        <div className="overflow-y-auto overflow-x-hidden max-h-96 pr-3">
           {items.map((uc, i) => {
-            const actualW = `${(uc.value / maxVal) * 100}%`
-            const planW   = uc.plan != null ? `${(uc.plan / maxVal) * 100}%` : '0%'
-            const isOver  = uc.plan != null && uc.value > uc.plan
-            const desc    = descByName[uc.label]
+            const isOver = uc.plan != null && uc.value > uc.plan
+            const desc   = descByName[uc.label]
             return (
               <div
-                key={uc.rank ?? uc.label}
+                key={uc.label}
                 className={clsx(
-                  'grid items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
+                  'grid gap-x-3 items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
                   i < items.length - 1 && 'border-b border-gray-50',
                 )}
                 style={{ gridTemplateColumns: cols }}
               >
-                <div className="col-span-1">
-                  <span className="text-xs font-black font-mono text-gray-300">{uc.rank ?? String(i + 1).padStart(2, '0')}</span>
+                <div>
+                  <span className="text-xs font-black font-mono text-gray-300">{String(i + 1).padStart(2, '0')}</span>
                 </div>
-                <div className="col-span-7 pr-2">
-                  <div className="relative inline-block">
+                <div className="min-w-0">
+                  <div className="relative inline-block max-w-full">
                     <span
-                      className={clsx('text-sm font-semibold text-gray-800 leading-snug', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      className={clsx('text-sm font-semibold text-gray-800 leading-snug break-words', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
                       onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
                     >{uc.label}</span>
                     {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
                   </div>
                 </div>
-                <div className="col-span-2 pr-2">
-                  <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    {vsPlan && uc.plan != null && (
-                      <div className="absolute inset-y-0 left-0 bg-sky-100 rounded-full" style={{ width: planW }} />
-                    )}
-                    <div
-                      className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
-                      style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
-                    />
-                  </div>
-                </div>
-                <div className="col-span-2 text-right">
+                <div className="text-right">
                   <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
                     {fmtVal(uc.value, unit)}
                   </span>
@@ -360,7 +346,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                   )}
                 </div>
                 {vsPlan && (
-                  <div className="col-span-1 text-right">
+                  <div className="text-right">
                     <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>{uc.plan != null ? fmtVal(uc.plan, unit) : '—'}</span>
                   </div>
                 )}
@@ -374,8 +360,8 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
 
   // ── AI Cost mode (spend $M) ────────────────────────────────────────────────
   const items  = drill.byUseCase
-  const maxAmt = Math.max(...items.map(u => Math.max(u.amount, u.plan ?? 0)))
-  const cols   = vsPlan ? 'repeat(13, minmax(0,1fr))' : 'repeat(12, minmax(0,1fr))'
+  // Fixed columns: rank | name (flexible) | kpi-tag | value | [plan]
+  const cols = vsPlan ? '1.5rem 1fr 5rem 5.5rem 4rem' : '1.5rem 1fr 5rem 5.5rem'
   return (
     <div className="col-span-1 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="mb-6">
@@ -383,57 +369,43 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
           All {items.length} use cases — by spend
         </p>
       </div>
-      <div className="grid pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
-        <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400">#</div>
-        <div className="col-span-5 text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
-        <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400">KPI</div>
-        <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400">Spend</div>
-        <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400 text-right">$M</div>
-        {vsPlan && <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
+      <div className="grid gap-x-3 pb-2.5 border-b border-gray-100 mb-1" style={{ gridTemplateColumns: cols }}>
+        <div className="text-[10px] font-bold tracking-wider text-gray-400">#</div>
+        <div className="text-[10px] font-bold tracking-wider text-gray-400">Use case</div>
+        <div className="text-[10px] font-bold tracking-wider text-gray-400">KPI</div>
+        <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">$M</div>
+        {vsPlan && <div className="text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
       </div>
-      <div className="overflow-y-auto max-h-96">
+      <div className="overflow-y-auto overflow-x-hidden max-h-96 pr-3">
         {items.map((uc, i) => {
-          const actualW = `${(uc.amount / maxAmt) * 100}%`
-          const planW   = uc.plan != null ? `${(uc.plan / maxAmt) * 100}%` : '0%'
-          const isOver  = uc.plan !== undefined && uc.plan !== null && uc.amount > uc.plan
+          const isOver = uc.plan !== undefined && uc.plan !== null && uc.amount > uc.plan
           return (
             <div
-              key={uc.rank}
+              key={uc.name}
               className={clsx(
-                'grid items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
+                'grid gap-x-3 items-center py-3 rounded-xl -mx-2 px-2 transition-colors hover:bg-gray-50',
                 i < items.length - 1 && 'border-b border-gray-50',
               )}
               style={{ gridTemplateColumns: cols }}
             >
-              <div className="col-span-1">
-                <span className="text-xs font-black font-mono text-gray-300">{uc.rank}</span>
+              <div>
+                <span className="text-xs font-black font-mono text-gray-300">{String(i + 1).padStart(2, '0')}</span>
               </div>
-              <div className="col-span-5 pr-2">
-                <div className="relative inline-block">
+              <div className="min-w-0">
+                <div className="relative inline-block max-w-full">
                   <span
-                    className={clsx('text-sm font-semibold text-gray-800 leading-snug', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                    className={clsx('text-sm font-semibold text-gray-800 leading-snug break-words', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
                     onClick={e => { if (!uc.description) return; e.stopPropagation(); setOpenPopover(openPopover === uc.name ? null : uc.name) }}
                   >{uc.name}</span>
                   {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
                 </div>
               </div>
-              <div className="col-span-2">
+              <div>
                 <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full', kpiTag(uc.kpi))}>
                   {uc.kpi}
                 </span>
               </div>
-              <div className="col-span-2 pr-2">
-                <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  {vsPlan && uc.plan != null && (
-                    <div className="absolute inset-y-0 left-0 bg-sky-100 rounded-full" style={{ width: planW }} />
-                  )}
-                  <div
-                    className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
-                    style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
-                  />
-                </div>
-              </div>
-              <div className="col-span-2 text-right">
+              <div className="text-right">
                 <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
                   ${uc.amount}M
                 </span>
@@ -442,7 +414,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                 )}
               </div>
               {vsPlan && (
-                <div className="col-span-1 text-right">
+                <div className="text-right">
                   <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-500' : 'text-sky-500')}>${uc.plan}M</span>
                 </div>
               )}
