@@ -206,7 +206,7 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal =
           <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(kpiTotal, unit)} total</p>
         </div>
       </div>
-      <div className="space-y-5 flex-1">
+      <div className="space-y-5 overflow-y-auto max-h-96">
         {items.map((item, i) => {
           const pctOfTotal = kpiTotal > 0 ? ((item.amount / kpiTotal) * 100).toFixed(0) : '—'
           const actualW    = `${(item.amount / maxBar) * 100}%`
@@ -313,7 +313,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
           <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400 text-right">{unit}</div>
           {vsPlan && <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
         </div>
-        <div className="flex-1">
+        <div className="overflow-y-auto max-h-96">
           {items.map((uc, i) => {
             const actualW = `${(uc.value / maxVal) * 100}%`
             const planW   = uc.plan != null ? `${(uc.plan / maxVal) * 100}%` : '0%'
@@ -391,7 +391,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
         <div className="col-span-2 text-[10px] font-bold tracking-wider text-gray-400 text-right">$M</div>
         {vsPlan && <div className="col-span-1 text-[10px] font-bold tracking-wider text-gray-400 text-right">Plan</div>}
       </div>
-      <div className="flex-1">
+      <div className="overflow-y-auto max-h-96">
         {items.map((uc, i) => {
           const actualW = `${(uc.amount / maxAmt) * 100}%`
           const planW   = uc.plan != null ? `${(uc.plan / maxAmt) * 100}%` : '0%'
