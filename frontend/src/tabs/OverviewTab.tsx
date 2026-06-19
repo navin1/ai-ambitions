@@ -258,11 +258,17 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal =
                 <span className="text-sm font-semibold text-gray-700 leading-tight min-w-0 flex-1 truncate" title={item.label}>{item.label}</span>
                 <div className="flex items-center gap-2 shrink-0">
                   {vsPlan && item.plan != null && (
-                    <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                    <span className="text-sm font-black tabular-nums text-sky-500">
                       Plan {fmtVal(item.plan, unit)}
                     </span>
                   )}
-                  <span className="text-sm font-black text-gray-900 tabular-nums">{fmtVal(item.amount, unit)}</span>
+                  <span className={clsx('text-sm font-black tabular-nums',
+                    vsPlan && item.plan != null
+                      ? (unit === '$M'
+                          ? (isOver ? 'text-rose-500' : item.amount === item.plan ? 'text-gray-900' : 'text-green-600')
+                          : (isOver ? 'text-green-600' : item.amount === item.plan ? 'text-gray-900' : 'text-rose-500'))
+                      : 'text-gray-900'
+                  )}>{fmtVal(item.amount, unit)}</span>
                 </div>
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -273,7 +279,7 @@ function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal =
                   />
                 )}
                 <div
-                  className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                  className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan && unit === '$M' ? 'bg-rose-500' : 'bg-gray-800')}
                   style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
                 />
               </div>
@@ -380,11 +386,15 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {vsPlan && uc.plan != null && (
-                      <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                      <span className="text-sm font-black tabular-nums text-sky-500">
                         Plan {fmtVal(uc.plan, unit)}
                       </span>
                     )}
-                    <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
+                    <span className={clsx('text-sm font-black tabular-nums',
+                      vsPlan && uc.plan != null
+                        ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
+                        : 'text-gray-900'
+                    )}>
                       {fmtVal(uc.value, unit)}
                     </span>
                   </div>
@@ -397,7 +407,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                     />
                   )}
                   <div
-                    className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                    className="absolute inset-y-0 left-0 rounded-full bg-gray-800"
                     style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
                   />
                 </div>
@@ -462,11 +472,15 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {vsPlan && uc.plan != null && (
-                    <span className={clsx('text-sm font-black tabular-nums', isOver ? 'text-rose-500' : 'text-sky-500')}>
+                    <span className="text-sm font-black tabular-nums text-sky-500">
                       Plan {fmtVal(uc.plan, unit)}
                     </span>
                   )}
-                  <span className={clsx('text-sm font-black tabular-nums', isOver && vsPlan ? 'text-rose-600' : 'text-gray-900')}>
+                  <span className={clsx('text-sm font-black tabular-nums',
+                    vsPlan && uc.plan != null
+                      ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
+                      : 'text-gray-900'
+                  )}>
                     {fmtVal(uc.amount, unit)}
                   </span>
                 </div>
