@@ -84,12 +84,15 @@ CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
   functional_area    STRING             OPTIONS(description='Primary function (Commerce, CX, Operations, etc.)'),
   cost_actual        FLOAT64            OPTIONS(description='Actual AI spend ($M)'),
   cost_plan          FLOAT64            OPTIONS(description='Planned spend ($M)'),
-  revenue_actual     FLOAT64            OPTIONS(description='Revenue growth contribution (%); NULL = not contributing'),
-  revenue_plan       FLOAT64            OPTIONS(description='Planned revenue contribution (%)'),
+  revenue_actual         FLOAT64            OPTIONS(description='Revenue growth contribution (%); NULL = not contributing'),
+  revenue_plan           FLOAT64            OPTIONS(description='Planned revenue contribution (%)'),
+  revenue_actual_dollars FLOAT64            OPTIONS(description='Revenue growth contribution ($M); NULL = not contributing'),
+  revenue_plan_dollars   FLOAT64            OPTIONS(description='Planned revenue contribution ($M)'),
   nps_actual         FLOAT64            OPTIONS(description='NPS improvement contribution (pts); NULL = not contributing'),
   nps_plan           FLOAT64            OPTIONS(description='Planned NPS contribution (pts)'),
   efficiency_actual  FLOAT64            OPTIONS(description='Efficiency gain contribution (%); NULL = not contributing'),
   efficiency_plan    FLOAT64            OPTIONS(description='Planned efficiency contribution (%)'),
+  current_phase      STRING             OPTIONS(description='Delivery phase: Planning | Pilot | Scaling | Production'),
   update_ts          TIMESTAMP          OPTIONS(description='Last refresh timestamp')
 );
 
@@ -112,7 +115,8 @@ SELECT
   CAST(NULL AS INT64)  AS display_rank,
   CAST(NULL AS STRING) AS description,
   CAST(NULL AS STRING) AS csg,
-  CAST(NULL AS STRING) AS functional_area
+  CAST(NULL AS STRING) AS functional_area,
+  CAST(NULL AS STRING) AS current_phase
 FROM `ai_ambitions.ai_amb_dimension_metrics`
 WHERE metric_id = 'cost'
 
@@ -125,15 +129,20 @@ SELECT
   COALESCE(cost_actual, 0.0) AS actual_amount,
   cost_plan            AS plan_amount,
   CASE
-    WHEN revenue_actual    IS NOT NULL THEN 'REVENUE'
-    WHEN nps_actual        IS NOT NULL THEN 'NPS'
-    WHEN efficiency_actual IS NOT NULL THEN 'EFFICIENCY'
+    WHEN revenue_actual IS NOT NULL AND nps_actual IS NOT NULL AND efficiency_actual IS NOT NULL THEN 'REVENUE,NPS,EFFICIENCY'
+    WHEN revenue_actual IS NOT NULL AND nps_actual IS NOT NULL                                  THEN 'REVENUE,NPS'
+    WHEN revenue_actual IS NOT NULL AND efficiency_actual IS NOT NULL                           THEN 'REVENUE,EFFICIENCY'
+    WHEN nps_actual     IS NOT NULL AND efficiency_actual IS NOT NULL                           THEN 'NPS,EFFICIENCY'
+    WHEN revenue_actual IS NOT NULL                                                             THEN 'REVENUE'
+    WHEN nps_actual     IS NOT NULL                                                             THEN 'NPS'
+    WHEN efficiency_actual IS NOT NULL                                                          THEN 'EFFICIENCY'
     ELSE ''
   END                  AS kpi_tag,
   CAST(NULL AS INT64)  AS display_rank,
   description,
   csg,
-  functional_area
+  functional_area,
+  current_phase
 FROM `ai_ambitions.ai_amb_use_case_data`;
 
 
@@ -150,7 +159,11 @@ SELECT
   dimension_name,
   actual_value,
   plan_value,
-  CAST(NULL AS INT64)  AS display_rank
+  CAST(NULL AS INT64)    AS display_rank,
+  CAST(NULL AS STRING)   AS current_phase,
+  CAST(NULL AS STRING)   AS functional_area,
+  CAST(NULL AS FLOAT64)  AS revenue_actual_dollars,
+  CAST(NULL AS FLOAT64)  AS revenue_plan_dollars
 FROM `ai_ambitions.ai_amb_dimension_metrics`
 WHERE metric_id IN ('revenue', 'nps', 'efficiency')
 
@@ -163,7 +176,11 @@ SELECT
   use_case             AS dimension_name,
   revenue_actual       AS actual_value,
   revenue_plan         AS plan_value,
-  CAST(NULL AS INT64)  AS display_rank
+  CAST(NULL AS INT64)  AS display_rank,
+  current_phase,
+  functional_area,
+  revenue_actual_dollars,
+  revenue_plan_dollars
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE revenue_actual IS NOT NULL
 
@@ -176,7 +193,11 @@ SELECT
   use_case             AS dimension_name,
   nps_actual           AS actual_value,
   nps_plan             AS plan_value,
-  CAST(NULL AS INT64)  AS display_rank
+  CAST(NULL AS INT64)   AS display_rank,
+  current_phase,
+  functional_area,
+  CAST(NULL AS FLOAT64) AS revenue_actual_dollars,
+  CAST(NULL AS FLOAT64) AS revenue_plan_dollars
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE nps_actual IS NOT NULL
 
@@ -189,6 +210,10 @@ SELECT
   use_case             AS dimension_name,
   efficiency_actual    AS actual_value,
   efficiency_plan      AS plan_value,
-  CAST(NULL AS INT64)  AS display_rank
+  CAST(NULL AS INT64)   AS display_rank,
+  current_phase,
+  functional_area,
+  CAST(NULL AS FLOAT64) AS revenue_actual_dollars,
+  CAST(NULL AS FLOAT64) AS revenue_plan_dollars
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE efficiency_actual IS NOT NULL;

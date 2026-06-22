@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Download } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Download, X, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { fetchOverviewSummary, type TileVal, type DrillData, type KpiDrillData } from '../api/overview'
@@ -7,9 +7,10 @@ import { exportOverviewPDF } from '../api/pdf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Status    = 'in-band' | 'below-target' | 'above-target' | 'under-plan' | 'over-plan'
-type DrillView = 'category' | 'vendor'
-type Period    = 'YTD' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
+type Status = 'in-band' | 'below-target' | 'above-target' | 'under-plan' | 'over-plan'
+type Period  = 'YTD' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
+
+interface FaContrib { pct: number; rawValue: string; dollarStr?: string }
 
 interface TileMeta {
   id: string; label: string
@@ -19,23 +20,22 @@ interface TileMeta {
   isSpendTile?: boolean
 }
 
-// ── Static tile metadata — UI configuration only, never changes ───────────────
+// ── Static tile metadata ──────────────────────────────────────────────────────
 
 const TILE_META: TileMeta[] = [
-  { id: 'ai-cost',    label: 'AI Cost',         rangeMin: 0, rangeMax: 60, targetMin: 0,  targetMax: 45, rangeUnit: 'M', targetLabel: '', isSpendTile: true },
-  { id: 'revenue',    label: 'Revenue Growth',  rangeMin: 0, rangeMax: 10, targetMin: 3,  targetMax: 7,  rangeUnit: '%', targetLabel: 'target band 3–7%'   },
-  { id: 'nps',        label: 'NPS Improvement', rangeMin: 0, rangeMax: 6,  targetMin: 2,  targetMax: 4,  rangeUnit: '',  targetLabel: 'target band 2–4'    },
-  { id: 'efficiency', label: 'Efficiency Gain', rangeMin: 0, rangeMax: 50, targetMin: 30, targetMax: 40, rangeUnit: '%', targetLabel: 'target band 30–40%' },
-]
-
-const DRILL_VIEWS: { key: DrillView; label: string }[] = [
-  { key: 'category', label: 'By Category' },
-  { key: 'vendor',   label: 'By Vendor'   },
+  { id: 'ai-cost',    label: 'AI Cost',         rangeMin: 0, rangeMax: 100, targetMin: 0,  targetMax: 45, rangeUnit: 'M', targetLabel: '',                isSpendTile: true },
+  { id: 'revenue',    label: 'Revenue Growth',  rangeMin: 0, rangeMax: 10,  targetMin: 3,  targetMax: 7,  rangeUnit: '%', targetLabel: 'target band 3–7%'  },
+  { id: 'nps',        label: 'NPS Improvement', rangeMin: 0, rangeMax: 6,   targetMin: 2,  targetMax: 4,  rangeUnit: '',  targetLabel: 'target band 2–4'   },
+  { id: 'efficiency', label: 'Efficiency Gain', rangeMin: 0, rangeMax: 50,  targetMin: 30, targetMax: 40, rangeUnit: '%', targetLabel: 'target band 30–40%' },
 ]
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const STATUS: Record<Status, { strip: string; dot: string; badgeText: string; badgeBg: string; badgeBorder: string; ring: string; ringOffset: string }> = {
+const STATUS: Record<Status, {
+  strip: string; dot: string
+  badgeText: string; badgeBg: string; badgeBorder: string
+  ring: string; ringOffset: string
+}> = {
   'in-band':      { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
   'below-target': { strip: 'bg-amber-400',   dot: 'bg-amber-400',   badgeText: 'text-amber-700',   badgeBg: 'bg-amber-50',    badgeBorder: 'border-amber-200',   ring: 'ring-amber-400',   ringOffset: 'ring-offset-amber-400'   },
   'above-target': { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
@@ -49,10 +49,18 @@ const KPI_TAG: Record<string, string> = {
   NPS:        'bg-purple-50 text-purple-700  ring-1 ring-inset ring-purple-600/20',
 }
 
+const PHASE_STYLE: Record<string, string> = {
+  'Planning':   'bg-gray-100 text-gray-500',
+  'Pilot':      'bg-blue-50 text-blue-700',
+  'Scaling':    'bg-amber-50 text-amber-700',
+  'Production': 'bg-emerald-50 text-emerald-700',
+}
+
 function asPct(val: number, min: number, max: number) {
   return `${Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)).toFixed(2)}%`
 }
-function kpiTag(kpi: string) { return KPI_TAG[kpi] ?? 'bg-gray-100 text-gray-600' }
+function kpiTag(kpi: string)                       { return KPI_TAG[kpi] ?? 'bg-gray-100 text-gray-600' }
+function phaseStyle(p: string | null | undefined)  { return PHASE_STYLE[p ?? ''] ?? 'bg-gray-100 text-gray-500' }
 
 // ── Range bar ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +71,7 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
   if (isSpendTile) {
     const budget = planValue ?? 45
     const fillW  = asPct(current, rangeMin, rangeMax)
-    const planL  = asPct(budget,  rangeMin, rangeMax)
+    const planL  = asPct(budget, rangeMin, rangeMax)
     return (
       <div className="mt-5">
         <div className="relative h-2 bg-gray-100 rounded-full w-full">
@@ -83,7 +91,7 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
 
   const targetL  = asPct(targetMin, rangeMin, rangeMax)
   const targetW  = `${((targetMax - targetMin) / (rangeMax - rangeMin)) * 100}%`
-  const currentL = asPct(current,   rangeMin, rangeMax)
+  const currentL = asPct(current, rangeMin, rangeMax)
   const planL    = planCurrent !== undefined ? asPct(planCurrent, rangeMin, rangeMax) : null
 
   return (
@@ -91,15 +99,11 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
       <div className="relative h-2 bg-gray-100 rounded-full w-full">
         <div className="absolute inset-y-0 bg-gray-300 rounded-full" style={{ left: targetL, width: targetW }} />
         {vsPlan && planL && (
-          <div
-            className="absolute top-1/2 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-white shadow ring-1 ring-sky-200"
-            style={{ left: planL, transform: 'translate(-50%, -50%)' }}
-          />
+          <div className="absolute top-1/2 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-white shadow ring-1 ring-sky-200"
+            style={{ left: planL, transform: 'translate(-50%, -50%)' }} />
         )}
-        <div
-          className="absolute top-1/2 w-4 h-4 bg-gray-900 rounded-full border-2 border-white shadow-md"
-          style={{ left: currentL, transform: 'translate(-50%, -50%)' }}
-        />
+        <div className="absolute top-1/2 w-4 h-4 bg-gray-900 rounded-full border-2 border-white shadow-md"
+          style={{ left: currentL, transform: 'translate(-50%, -50%)' }} />
       </div>
       <div className="flex justify-between mt-2">
         <span className="text-[13px] text-gray-400">{rangeMin}{rangeUnit}</span>
@@ -112,8 +116,10 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 
-function KpiCard({ meta, val, period, vsPlan, isSelected, onClick }: {
-  meta: TileMeta; val: TileVal; period: Period; vsPlan: boolean; isSelected: boolean; onClick: () => void
+function KpiCard({ meta, val, period, vsPlan, isSelected, onClick, faContrib, selectedFA }: {
+  meta: TileMeta; val: TileVal; period: Period; vsPlan: boolean
+  isSelected: boolean; onClick: () => void
+  faContrib?: FaContrib | null; selectedFA?: string | null
 }) {
   const t = STATUS[val.status as Status] ?? STATUS['in-band']
   return (
@@ -127,8 +133,8 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick }: {
       <div className={clsx('absolute left-0 top-0 bottom-0 w-1', t.strip)} />
       <div className="pl-6 pr-5 pt-5 pb-5 flex flex-col flex-1">
         <div className="flex justify-between items-center">
-          <span className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">{meta.label}</span>
-          <span className={clsx('text-[9px] font-bold px-2 py-0.5 rounded-full border tracking-wide', t.badgeBg, t.badgeBorder, t.badgeText)}>
+          <span className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">{meta.label}</span>
+          <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full border tracking-wide', t.badgeBg, t.badgeBorder, t.badgeText)}>
             {period}
           </span>
         </div>
@@ -142,7 +148,7 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick }: {
         <RangeBar meta={meta} val={val} vsPlan={vsPlan} />
         <div className="mt-4 pt-3.5 border-t border-gray-50 flex items-center justify-between gap-2">
           <span className={clsx(
-            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide border',
+            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold tracking-wide border',
             t.badgeBg, t.badgeBorder, t.badgeText,
           )}>
             <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', t.dot)} />
@@ -155,6 +161,31 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick }: {
             </span>
           )}
         </div>
+
+        {/* ── Functional Area contribution ────────────────────────────── */}
+        {faContrib && selectedFA && (
+          <div className="mt-3 pt-3 border-t border-dashed border-violet-100">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-sm bg-violet-400 flex-shrink-0" />
+                <span className="text-xs font-black tracking-[0.12em] text-violet-600 uppercase truncate">{selectedFA}</span>
+              </div>
+              <span className="text-xs font-black text-gray-800 tabular-nums ml-2 flex-shrink-0">{faContrib.rawValue}</span>
+            </div>
+            {faContrib.dollarStr && (
+              <p className="text-xs font-semibold text-violet-500 mb-1.5">{faContrib.dollarStr} revenue impact</p>
+            )}
+            <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-violet-400 rounded-full"
+                style={{ width: `${Math.max(faContrib.pct, 1.5)}%`, transition: 'width 0.7s ease' }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-400 font-semibold">
+              {faContrib.pct.toFixed(0)}% contribution to this KPI
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -176,7 +207,7 @@ function KpiCardSkeleton() {
   )
 }
 
-// ── Shared widget helpers ─────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 function fmtVal(v: number, unit: string): string {
   if (unit === '$M')  return `$${v.toFixed(2)}M`
@@ -184,120 +215,55 @@ function fmtVal(v: number, unit: string): string {
   return `${v.toFixed(2)}%`
 }
 
-function PlanLegend() {
-  return (
-    <div className="mt-5 pt-4 border-t border-gray-50 flex items-center gap-4 text-[11px] font-semibold">
-      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-gray-800 inline-block" /> Actual</span>
-      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-sky-200 inline-block" /> Plan</span>
-      <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded-full bg-rose-400 inline-block" /> Over plan</span>
-    </div>
-  )
-}
 
 function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' | 'desc' }; colKey: string }) {
-  if (sortState.key !== colKey) return null
-  return <span className="text-[9px] text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
+  if (sortState.key !== colKey) return <span className="text-xs text-gray-300 select-none">⇅</span>
+  return <span className="text-xs text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
 }
 
-// ── Bar chart widget ──────────────────────────────────────────────────────────
+// ── Functional area picker ────────────────────────────────────────────────────
 
-function BarChartWidget({ drill, view, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
-  drill: DrillData; view: DrillView; vsPlan: boolean
-  kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
+function FunctionalAreaPicker({ areas, value, onChange }: {
+  areas: string[]; value: string | null; onChange: (v: string | null) => void
 }) {
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
-
-  function handleSort(key: string) {
-    setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
-  }
-
-  const rawItems: Array<{ label: string; amount: number; plan?: number | null }> = kpiDrill
-    ? (view === 'category' ? kpiDrill.byCategory : kpiDrill.byVendor).map(i => ({ label: i.label, amount: i.value, plan: i.plan }))
-    : view === 'category' ? drill.byCategory : drill.byVendor
-
-  const items = [...rawItems].sort((a, b) => {
-    if (sort.key === 'label') return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
-    if (sort.key === 'value') return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
-    return 0
-  })
-
-  const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)), 1)
-  const heading = view === 'category' ? `All ${items.length} categories` : `All ${items.length} vendors`
-
+  const active = value !== null
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">{heading}</p>
-          <p className="text-sm font-black text-gray-900 mt-0.5">{fmtVal(kpiTotal, unit)} total</p>
-        </div>
+    <div className={clsx(
+      'flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-all duration-200',
+      active ? 'bg-violet-50 border-violet-300' : 'bg-white border-gray-200 hover:border-gray-300',
+    )}>
+      <span className={clsx('text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap',
+        active ? 'text-violet-500' : 'text-gray-400'
+      )}>Area</span>
+      <div className="w-px h-3.5 bg-gray-200" />
+      <div className="relative flex items-center">
+        <select
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value || null)}
+          className={clsx(
+            'appearance-none pr-5 text-xs font-semibold bg-transparent cursor-pointer focus:outline-none',
+            active ? 'text-violet-700' : 'text-gray-600'
+          )}
+        >
+          <option value="">All</option>
+          {areas.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        {active
+          ? <button onClick={e => { e.stopPropagation(); onChange(null) }} className="absolute right-0 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-700 transition-colors">
+              <X size={12} />
+            </button>
+          : <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        }
       </div>
-      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
-        <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
-        <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('label')}>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400">
-            {view === 'category' ? 'Category' : 'Vendor'}
-          </span>
-          <SortIcon sortState={sort} colKey="label" />
-        </div>
-        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('value')}>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400">{unit}</span>
-          <SortIcon sortState={sort} colKey="value" />
-        </div>
-      </div>
-      <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
-        {items.map((item, i) => {
-          const pctOfTotal = kpiTotal > 0 ? ((item.amount / kpiTotal) * 100).toFixed(0) : '—'
-          const actualW    = `${(item.amount / maxBar) * 100}%`
-          const planW      = item.plan != null ? `${(item.plan / maxBar) * 100}%` : '0%'
-          const isOver     = item.plan !== undefined && item.plan !== null && item.amount > item.plan
-          return (
-            <div key={item.label}>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
-                <span className="text-sm font-semibold text-gray-700 leading-tight min-w-0 flex-1 truncate" title={item.label}>{item.label}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {vsPlan && item.plan != null && (
-                    <span className="text-sm font-black tabular-nums text-sky-500">
-                      Plan {fmtVal(item.plan, unit)}
-                    </span>
-                  )}
-                  <span className={clsx('text-sm font-black tabular-nums',
-                    vsPlan && item.plan != null
-                      ? (unit === '$M'
-                          ? (isOver ? 'text-rose-500' : item.amount === item.plan ? 'text-gray-900' : 'text-green-600')
-                          : (isOver ? 'text-green-600' : item.amount === item.plan ? 'text-gray-900' : 'text-rose-500'))
-                      : 'text-gray-900'
-                  )}>{fmtVal(item.amount, unit)}</span>
-                </div>
-              </div>
-              <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-                {vsPlan && item.plan != null && (
-                  <div
-                    className="absolute inset-y-0 left-0 bg-sky-100 rounded-full"
-                    style={{ width: planW, transition: `width 0.5s ease ${i * 60}ms` }}
-                  />
-                )}
-                <div
-                  className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan && unit === '$M' ? 'bg-rose-500' : 'bg-gray-800')}
-                  style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
-                />
-              </div>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
-            </div>
-          )
-        })}
-      </div>
-      {vsPlan && <PlanLegend />}
     </div>
   )
 }
 
-// ── Use case table widget ─────────────────────────────────────────────────────
+// ── Description popover ───────────────────────────────────────────────────────
 
 function DescriptionPopover({ text }: { text: string }) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  const hasBullets = lines.some(l => /^[•\-\*]/.test(l))
+  const hasBullets = lines.some(l => /^[•\-*]/.test(l))
   return (
     <div
       className="absolute left-0 top-full mt-2 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-xl p-4 max-h-64 overflow-y-auto"
@@ -308,7 +274,7 @@ function DescriptionPopover({ text }: { text: string }) {
           {lines.map((line, i) => (
             <li key={i} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
               <span className="text-gray-400 flex-shrink-0 mt-px">•</span>
-              <span>{line.replace(/^[•\-\*]\s*/, '')}</span>
+              <span>{line.replace(/^[•\-*]\s*/, '')}</span>
             </li>
           ))}
         </ul>
@@ -319,8 +285,12 @@ function DescriptionPopover({ text }: { text: string }) {
   )
 }
 
-function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
-  drill: DrillData; vsPlan: boolean; kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
+// ── Use case widget ───────────────────────────────────────────────────────────
+
+function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, filterArea }: {
+  drill: DrillData; vsPlan: boolean
+  kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
+  filterArea?: string | null
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
@@ -338,39 +308,70 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
 
   const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
 
+  // ── KPI metric mode ────────────────────────────────────────────────────────
   if (kpiDrill) {
-    // ── KPI metric mode (Revenue / NPS / Efficiency) ───────────────────────
-    const items = [...kpiDrill.byUseCase].sort((a, b) => {
-      if (sort.key === 'label') return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
-      if (sort.key === 'value') return sort.dir === 'asc' ? a.value - b.value : b.value - a.value
+    const allItems = kpiDrill.byUseCase
+    const visibleItems = filterArea ? allItems.filter(i => i.functionalArea === filterArea) : allItems
+    const items = [...visibleItems].sort((a, b) => {
+      if (sort.key === 'label')         return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
+      if (sort.key === 'value')         return sort.dir === 'asc' ? a.value - b.value : b.value - a.value
+      if (sort.key === 'currentPhase')  return sort.dir === 'asc' ? (a.currentPhase ?? '').localeCompare(b.currentPhase ?? '') : (b.currentPhase ?? '').localeCompare(a.currentPhase ?? '')
+      if (sort.key === 'functionalArea') return sort.dir === 'asc' ? (a.functionalArea ?? '').localeCompare(b.functionalArea ?? '') : (b.functionalArea ?? '').localeCompare(a.functionalArea ?? '')
+      if (sort.key === 'plan') { const ap = a.plan ?? -1; const bp = b.plan ?? -1; return sort.dir === 'asc' ? ap - bp : bp - ap }
       return 0
     })
-    const maxBar = Math.max(...items.map(i => Math.max(i.value, i.plan ?? 0)), 1)
+    const maxBar     = items.reduce((m, i) => Math.max(m, i.value), 0) || 1
+    const hasDollars = items.some(i => i.dollarValue != null)
+    const heading    = filterArea
+      ? `${items.length} use cases · ${filterArea}`
+      : `All ${items.length} use cases`
+
+    function fmtDisplayVal(uc: typeof items[number]) {
+      if (hasDollars && uc.dollarValue != null) return `$${uc.dollarValue.toFixed(1)}M`
+      return fmtVal(uc.value, unit)
+    }
+    function fmtDisplayPlan(uc: typeof items[number]) {
+      if (hasDollars && uc.dollarPlan != null) return `$${uc.dollarPlan.toFixed(1)}M`
+      return fmtVal(uc.plan ?? 0, unit)
+    }
 
     return (
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
-          <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
-            All {items.length} use cases — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
+          <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">
+            {heading} — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
           </p>
         </div>
         <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
-          <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
           <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('label')}>
-            <span className="text-[10px] font-bold tracking-wider text-gray-400">Use case</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
             <SortIcon sortState={sort} colKey="label" />
           </div>
-          <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('value')}>
-            <span className="text-[10px] font-bold tracking-wider text-gray-400">{unit}</span>
+          <div className="flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
+            <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
+            <SortIcon sortState={sort} colKey="currentPhase" />
+          </div>
+          <div className="flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
+            <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
+            <SortIcon sortState={sort} colKey="functionalArea" />
+          </div>
+          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('value')}>
+            <span className="text-xs font-bold tracking-wider text-gray-400">{hasDollars ? '$M' : unit}</span>
             <SortIcon sortState={sort} colKey="value" />
           </div>
+          {vsPlan && (
+            <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+              <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
+              <SortIcon sortState={sort} colKey="plan" />
+            </div>
+          )}
         </div>
-        <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
+        <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-[28rem] pr-3">
           {items.map((uc, i) => {
             const isOver     = uc.plan != null && uc.value > uc.plan
             const desc       = descByName[uc.label]
             const actualW    = `${(uc.value / maxBar) * 100}%`
-            const planW      = uc.plan != null ? `${(uc.plan / maxBar) * 100}%` : '0%'
             const pctOfTotal = kpiTotal > 0 ? ((uc.value / kpiTotal) * 100).toFixed(0) : '—'
             return (
               <div key={uc.label}>
@@ -384,74 +385,93 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                     >{uc.label}</span>
                     {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {vsPlan && uc.plan != null && (
-                      <span className="text-sm font-black tabular-nums text-sky-500">
-                        Plan {fmtVal(uc.plan, unit)}
-                      </span>
-                    )}
-                    <span className={clsx('text-sm font-black tabular-nums',
-                      vsPlan && uc.plan != null
-                        ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
-                        : 'text-gray-900'
-                    )}>
-                      {fmtVal(uc.value, unit)}
-                    </span>
+                  <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
+                    title={uc.currentPhase ?? ''}>
+                    {uc.currentPhase ?? '—'}
+                  </span>
+                  <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
+                    <span className="block text-xs text-gray-500 truncate leading-tight">{uc.functionalArea ?? '—'}</span>
                   </div>
+                  <span className={clsx('text-sm font-black tabular-nums shrink-0',
+                    vsPlan && uc.plan != null
+                      ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
+                      : 'text-gray-900'
+                  )}>{fmtDisplayVal(uc)}</span>
+                  {vsPlan && (
+                    <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
+                      {uc.plan != null ? fmtDisplayPlan(uc) : '—'}
+                    </span>
+                  )}
                 </div>
                 <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-                  {vsPlan && uc.plan != null && (
-                    <div
-                      className="absolute inset-y-0 left-0 bg-sky-100 rounded-full"
-                      style={{ width: planW, transition: `width 0.5s ease ${i * 60}ms` }}
-                    />
-                  )}
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-gray-800"
-                    style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
-                  />
+                  <div className="absolute inset-y-0 left-0 rounded-full bg-gray-800"
+                    style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }} />
                 </div>
-                <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
+                <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
               </div>
             )
           })}
+          {items.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <X size={16} className="text-gray-400" />
+              </div>
+              <p className="text-sm font-semibold text-gray-500">No use cases in {filterArea}</p>
+              <p className="text-xs text-gray-400 mt-1">for this KPI metric</p>
+            </div>
+          )}
         </div>
-        {vsPlan && <PlanLegend />}
       </div>
     )
   }
 
-  // ── AI Cost mode (spend $M) ────────────────────────────────────────────────
-  const items = [...drill.byUseCase].sort((a, b) => {
-    if (sort.key === 'name')   return sort.dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
-    if (sort.key === 'amount') return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
+  // ── AI Cost mode ───────────────────────────────────────────────────────────
+  const allCostItems = drill.byUseCase
+  const visibleCostItems = filterArea ? allCostItems.filter(u => u.functionalArea === filterArea) : allCostItems
+  const items = [...visibleCostItems].sort((a, b) => {
+    if (sort.key === 'name')           return sort.dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+    if (sort.key === 'amount')         return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
+    if (sort.key === 'currentPhase')   return sort.dir === 'asc' ? (a.currentPhase ?? '').localeCompare(b.currentPhase ?? '') : (b.currentPhase ?? '').localeCompare(a.currentPhase ?? '')
+    if (sort.key === 'functionalArea') return sort.dir === 'asc' ? (a.functionalArea ?? '').localeCompare(b.functionalArea ?? '') : (b.functionalArea ?? '').localeCompare(a.functionalArea ?? '')
+    if (sort.key === 'plan') { const ap = a.plan ?? -1; const bp = b.plan ?? -1; return sort.dir === 'asc' ? ap - bp : bp - ap }
     return 0
   })
-  const maxBar = Math.max(...items.map(i => Math.max(i.amount, i.plan ?? 0)), 1)
+  const heading   = filterArea ? `${items.length} use cases · ${filterArea}` : `All ${items.length} use cases`
 
   return (
     <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
       <div className="mb-6">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-gray-400 uppercase">
-          All {items.length} use cases — by spend
-        </p>
+        <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">{heading} — by spend</p>
       </div>
       <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
-        <span className="text-[10px] font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+        <span className="text-xs font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
         <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('name')}>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400">Use case</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
           <SortIcon sortState={sort} colKey="name" />
         </div>
-        <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort('amount')}>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400">$M</span>
+        <div className="flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
+          <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
+          <SortIcon sortState={sort} colKey="currentPhase" />
+        </div>
+        <div className="flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
+          <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
+          <SortIcon sortState={sort} colKey="functionalArea" />
+        </div>
+        <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('amount')}>
+          <span className="text-xs font-bold tracking-wider text-gray-400">$M</span>
           <SortIcon sortState={sort} colKey="amount" />
         </div>
+        {vsPlan && (
+          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+            <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
+            <SortIcon sortState={sort} colKey="plan" />
+          </div>
+        )}
       </div>
-      <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-96 pr-3">
+      <div className="space-y-5 overflow-y-auto overflow-x-hidden max-h-[28rem] pr-3">
         {items.map((uc, i) => {
           const isOver     = uc.plan !== undefined && uc.plan !== null && uc.amount > uc.plan
-          const actualW    = `${(uc.amount / maxBar) * 100}%`
-          const planW      = uc.plan != null ? `${(uc.plan / maxBar) * 100}%` : '0%'
+          const actualW    = `${kpiTotal > 0 ? (uc.amount / kpiTotal) * 100 : 0}%`
           const pctOfTotal = kpiTotal > 0 ? ((uc.amount / kpiTotal) * 100).toFixed(0) : '—'
           return (
             <div key={uc.name}>
@@ -466,48 +486,54 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0 }: {
                     >{uc.name}</span>
                     {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
                   </div>
-                  <span className={clsx('text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0', kpiTag(uc.kpi))}>
-                    {uc.kpi}
-                  </span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {(uc.kpi ? uc.kpi.split(',').filter(Boolean) : []).map(tag => (
+                      <span key={tag} className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag))}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {vsPlan && uc.plan != null && (
-                    <span className="text-sm font-black tabular-nums text-sky-500">
-                      Plan {fmtVal(uc.plan, unit)}
-                    </span>
-                  )}
-                  <span className={clsx('text-sm font-black tabular-nums',
-                    vsPlan && uc.plan != null
-                      ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
-                      : 'text-gray-900'
-                  )}>
-                    {fmtVal(uc.amount, unit)}
-                  </span>
+                <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
+                  title={uc.currentPhase ?? ''}>
+                  {uc.currentPhase ?? '—'}
+                </span>
+                <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
+                  <span className="block text-xs text-gray-500 truncate leading-tight">{uc.functionalArea ?? '—'}</span>
                 </div>
+                <span className={clsx('text-sm font-black tabular-nums shrink-0',
+                  vsPlan && uc.plan != null
+                    ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
+                    : 'text-gray-900'
+                )}>{fmtVal(uc.amount, '$M')}</span>
+                {vsPlan && (
+                  <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
+                    {uc.plan != null ? fmtVal(uc.plan, '$M') : '—'}
+                  </span>
+                )}
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-                {vsPlan && uc.plan != null && (
-                  <div
-                    className="absolute inset-y-0 left-0 bg-sky-100 rounded-full"
-                    style={{ width: planW, transition: `width 0.5s ease ${i * 60}ms` }}
-                  />
-                )}
-                <div
-                  className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
-                  style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }}
-                />
+                <div className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
+                  style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }} />
               </div>
-              <p className="mt-1 text-[10px] text-gray-400 font-medium">{pctOfTotal}% of total</p>
+              <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
             </div>
           )
         })}
+        {items.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+              <X size={16} className="text-gray-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-500">No use cases in {filterArea}</p>
+          </div>
+        )}
       </div>
-      {vsPlan && <PlanLegend />}
     </div>
   )
 }
 
-// ── Widget skeletons ──────────────────────────────────────────────────────────
+// ── Widget skeleton ───────────────────────────────────────────────────────────
 
 function WidgetSkeleton() {
   return (
@@ -528,15 +554,15 @@ function WidgetSkeleton() {
 // ── Main tab ──────────────────────────────────────────────────────────────────
 
 export function OverviewTab() {
-  const [period,      setPeriod]      = useState<Period>('YTD')
-  const [vsPlan,      setVsPlan]      = useState(false)
-  const [drillView,   setDrillView]   = useState<DrillView>('category')
-  const [exporting,   setExporting]   = useState(false)
-  const [selectedKpi, setSelectedKpi] = useState<string>('ai-cost')
+  const [period,              setPeriod]              = useState<Period>('YTD')
+  const [vsPlan,              setVsPlan]              = useState(false)
+  const [exporting,           setExporting]           = useState(false)
+  const [selectedKpi,         setSelectedKpi]         = useState<string>('revenue')
+  const [selectedFunctionalArea, setSelectedFunctionalArea] = useState<string | null>(null)
 
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['overview', period],
-    queryFn: () => fetchOverviewSummary(period),
+    queryFn:  () => fetchOverviewSummary(period),
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
   })
@@ -545,17 +571,81 @@ export function OverviewTab() {
   const drill        = data?.investment
   const kpiBreakdown = data?.kpiBreakdown
   const costVal      = tileVals?.[0]?.value ?? '…'
-  const costLabel = `Where the ${costVal} is going`
+
+  // Derive sorted unique functional areas from all use cases
+  const uniqueAreas: string[] = (() => {
+    if (!drill?.byUseCase) return []
+    const set = new Set<string>()
+    for (const u of drill.byUseCase) { if (u.functionalArea) set.add(u.functionalArea) }
+    return [...set].sort((a, b) => a.localeCompare(b))
+  })()
+
+  // Compute FA contribution for every KPI tile
+  const faContribs: Record<string, FaContrib | null> = (() => {
+    if (!selectedFunctionalArea || !data || !tileVals) return {}
+    const result: Record<string, FaContrib | null> = {}
+
+    for (const m of TILE_META) {
+      const tileIdx  = TILE_META.indexOf(m)
+      const kpiTotal = tileVals[tileIdx]?.current ?? 0
+      if (kpiTotal === 0) { result[m.id] = null; continue }
+
+      let sum = 0; let dollarSum: number | null = null
+
+      if (m.id === 'ai-cost') {
+        sum = (data.investment.byUseCase)
+          .filter(u => u.functionalArea === selectedFunctionalArea)
+          .reduce((s, u) => s + u.amount, 0)
+      } else {
+        const kpiKey  = m.id as 'revenue' | 'nps' | 'efficiency'
+        const kpiItems = data.kpiBreakdown[kpiKey].byUseCase
+        sum = kpiItems
+          .filter(i => i.functionalArea === selectedFunctionalArea)
+          .reduce((s, i) => s + i.value, 0)
+        if (m.id === 'revenue') {
+          dollarSum = kpiItems
+            .filter(i => i.functionalArea === selectedFunctionalArea && i.dollarValue != null)
+            .reduce((s, i) => s + (i.dollarValue ?? 0), 0)
+        }
+      }
+
+      const pct = kpiTotal > 0 ? Math.min(100, (sum / kpiTotal) * 100) : 0
+      let rawValue = ''
+      if (m.id === 'ai-cost')    rawValue = `$${sum.toFixed(1)}M invested`
+      else if (m.id === 'revenue')    rawValue = `${sum.toFixed(2)}% growth`
+      else if (m.id === 'nps')        rawValue = `${sum.toFixed(2)} pts`
+      else                            rawValue = `${sum.toFixed(1)}% gain`
+
+      result[m.id] = {
+        pct,
+        rawValue,
+        dollarStr: dollarSum != null && dollarSum > 0 ? `$${dollarSum.toFixed(1)}M` : undefined,
+      }
+    }
+    return result
+  })()
 
   async function handleExport() {
     if (!tileVals || !drill || exporting) return
     setExporting(true)
     try {
-      await exportOverviewPDF(period, tileVals, drill, drillView, selectedKpi, kpiBreakdown)
+      await exportOverviewPDF(period, tileVals, drill, 'category', selectedKpi, kpiBreakdown)
     } finally {
       setExporting(false)
     }
   }
+
+  const isSpendView = selectedKpi === 'ai-cost'
+  const kpiDrill    = !isSpendView ? kpiBreakdown?.[selectedKpi as 'revenue' | 'nps' | 'efficiency'] ?? null : null
+  const unit        = selectedKpi === 'nps' ? 'pts' : isSpendView ? '$M' : '%'
+  const kpiTotalVal = tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0
+
+  const sectionHeading = isSpendView ? 'AI Investment Breakdown' :
+    selectedKpi === 'revenue'    ? 'Revenue Growth Breakdown'    :
+    selectedKpi === 'nps'        ? 'NPS Improvement Breakdown'   : 'Efficiency Gain Breakdown'
+  const sectionSubheading = isSpendView ? `Where the ${costVal} is going` :
+    selectedKpi === 'revenue'    ? '% revenue growth by initiative'       :
+    selectedKpi === 'nps'        ? 'NPS improvement points by initiative' : '% efficiency gain by initiative'
 
   return (
     <div className="flex flex-col gap-5 p-6 bg-gray-50/60 min-h-full">
@@ -566,7 +656,7 @@ export function OverviewTab() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Overview</h1>
             {isFetching && !isLoading && (
-              <span className="text-[10px] font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full animate-pulse">
+              <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full animate-pulse">
                 refreshing…
               </span>
             )}
@@ -575,42 +665,30 @@ export function OverviewTab() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Period selector */}
           <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
               const isDisabled = p !== 'YTD'
               return (
                 <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  disabled={isDisabled}
+                  key={p} onClick={() => setPeriod(p)} disabled={isDisabled}
                   className={clsx(
                     'px-4 py-2 text-xs font-bold tracking-wide transition-all',
-                    isDisabled
-                      ? 'text-gray-300 cursor-not-allowed'
+                    isDisabled ? 'text-gray-300 cursor-not-allowed'
                       : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
                   )}
-                >
-                  {p}
-                </button>
+                >{p}</button>
               )
             })}
           </div>
-
-          {/* VS PLAN */}
           <button
             onClick={() => setVsPlan(v => !v)}
             className={clsx(
               'px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm',
               vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300',
             )}
-          >
-            VS PLAN
-          </button>
-
+          >VS PLAN</button>
           <button
-            onClick={handleExport}
-            disabled={exporting || !data}
+            onClick={handleExport} disabled={exporting || !data}
             className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white text-xs font-bold tracking-wide rounded-xl hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={13} />
@@ -619,7 +697,7 @@ export function OverviewTab() {
         </div>
       </div>
 
-      {/* ── Error state ───────────────────────────────────────────────── */}
+      {/* ── Error ─────────────────────────────────────────────────────── */}
       {isError && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
           Failed to load dashboard data. Check BigQuery connectivity and refresh.
@@ -627,68 +705,59 @@ export function OverviewTab() {
       )}
 
       {/* ── KPI cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-4">
-        {isLoading || !tileVals
-          ? TILE_META.map(m => <KpiCardSkeleton key={m.id} />)
-          : TILE_META.map((meta, i) => (
+      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 3px 1fr' }}>
+        {isLoading || !tileVals ? (
+          <>
+            <KpiCardSkeleton /><KpiCardSkeleton /><KpiCardSkeleton />
+            <div className="bg-black self-stretch" />
+            <KpiCardSkeleton />
+          </>
+        ) : (
+          <>
+            {[1, 2, 3].map(i => (
               <KpiCard
-                key={meta.id} meta={meta} val={tileVals[i]} period={period} vsPlan={vsPlan}
-                isSelected={selectedKpi === meta.id}
-                onClick={() => setSelectedKpi(meta.id)}
+                key={TILE_META[i].id} meta={TILE_META[i]} val={tileVals[i]} period={period} vsPlan={vsPlan}
+                isSelected={selectedKpi === TILE_META[i].id}
+                onClick={() => setSelectedKpi(TILE_META[i].id)}
+                faContrib={faContribs[TILE_META[i].id]}
+                selectedFA={selectedFunctionalArea}
               />
-            ))
-        }
+            ))}
+            <div className="bg-black self-stretch" />
+            <KpiCard
+              meta={TILE_META[0]} val={tileVals[0]} period={period} vsPlan={vsPlan}
+              isSelected={selectedKpi === TILE_META[0].id}
+              onClick={() => setSelectedKpi(TILE_META[0].id)}
+              faContrib={faContribs[TILE_META[0].id]}
+              selectedFA={selectedFunctionalArea}
+            />
+          </>
+        )}
       </div>
 
       {/* ── Lower section ─────────────────────────────────────────────── */}
-      {(() => {
-        const isSpendView = selectedKpi === 'ai-cost'
-        const kpiDrill    = !isSpendView ? kpiBreakdown?.[selectedKpi as 'revenue' | 'nps' | 'efficiency'] ?? null : null
-        const unit        = selectedKpi === 'nps' ? 'pts' : isSpendView ? '$M' : '%'
-        const sectionHeading = isSpendView ? 'AI Investment Breakdown' :
-          selectedKpi === 'revenue'    ? 'Revenue Growth Breakdown'   :
-          selectedKpi === 'nps'        ? 'NPS Improvement Breakdown'  : 'Efficiency Gain Breakdown'
-        const sectionSubheading = isSpendView ? costLabel :
-          selectedKpi === 'revenue'    ? '% revenue growth by initiative'    :
-          selectedKpi === 'nps'        ? 'NPS improvement points by initiative' : '% efficiency gain by initiative'
-        return (
-          <div className="space-y-3">
-            <div className="flex items-end justify-between px-1">
-              <div>
-                <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
-                <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
-              </div>
-              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
-                {DRILL_VIEWS.map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setDrillView(key)}
-                    className={clsx(
-                      'px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200 tracking-wide',
-                      drillView === key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {isLoading || !drill
-                ? <>
-                    <WidgetSkeleton />
-                    <WidgetSkeleton />
-                  </>
-                : <>
-                    <UseCaseWidget  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} kpiTotal={tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0} />
-                    <BarChartWidget drill={drill} view={drillView} vsPlan={vsPlan} kpiDrill={kpiDrill} unit={unit} kpiTotal={tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0} />
-                  </>
-              }
-            </div>
+      <div className="space-y-3">
+        <div className="flex items-end justify-between px-1">
+          <div>
+            <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
+            <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
           </div>
-        )
-      })()}
+          <FunctionalAreaPicker
+            areas={uniqueAreas}
+            value={selectedFunctionalArea}
+            onChange={setSelectedFunctionalArea}
+          />
+        </div>
+
+        {isLoading || !drill
+          ? <WidgetSkeleton />
+          : <UseCaseWidget
+              drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill}
+              unit={unit} kpiTotal={kpiTotalVal}
+              filterArea={selectedFunctionalArea}
+            />
+        }
+      </div>
     </div>
   )
 }

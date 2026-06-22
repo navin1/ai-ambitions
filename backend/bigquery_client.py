@@ -191,7 +191,7 @@ def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
-        SELECT kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank
+        SELECT kpi_id, dimension_type, dimension_name, actual_value, plan_value, display_rank, current_phase, functional_area, revenue_actual_dollars, revenue_plan_dollars
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_breakdown_v`
         WHERE period = '{period}'
         ORDER BY kpi_id, dimension_type, actual_value DESC
@@ -203,7 +203,7 @@ def fetch_investment(period: str, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
-        SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, description, csg, functional_area
+        SELECT dimension_type, dimension_name, actual_amount, plan_amount, kpi_tag, display_rank, description, csg, functional_area, current_phase
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_investment_breakdown_v`
         WHERE period = '{period}'
         ORDER BY dimension_type, actual_amount DESC
@@ -268,6 +268,7 @@ def build_overview_response(period: str, creds) -> dict:
                 "description":   r.get("description") or None,
                 "csg":           r.get("csg") or None,
                 "functionalArea": r.get("functional_area") or None,
+                "currentPhase":  r.get("current_phase") or None,
             })
         elif dt == "vendor":
             by_vendor.append({
@@ -288,10 +289,14 @@ def build_overview_response(period: str, creds) -> dict:
         if kid not in kpi_breakdown:
             continue
         item = {
-            "label": r["dimension_name"],
-            "value": float(r["actual_value"] or 0),
-            "plan":  float(r["plan_value"] or 0) if r.get("plan_value") is not None else None,
-            "rank":  f"{int(r['display_rank']):02d}" if r.get("display_rank") is not None else None,
+            "label":         r["dimension_name"],
+            "value":         float(r["actual_value"] or 0),
+            "plan":          float(r["plan_value"] or 0) if r.get("plan_value") is not None else None,
+            "rank":          f"{int(r['display_rank']):02d}" if r.get("display_rank") is not None else None,
+            "currentPhase":  r.get("current_phase") or None,
+            "functionalArea": r.get("functional_area") or None,
+            "dollarValue":   float(r["revenue_actual_dollars"]) if r.get("revenue_actual_dollars") is not None else None,
+            "dollarPlan":    float(r["revenue_plan_dollars"])   if r.get("revenue_plan_dollars")   is not None else None,
         }
         target = kpi_breakdown[kid]
         if dt == "category":
