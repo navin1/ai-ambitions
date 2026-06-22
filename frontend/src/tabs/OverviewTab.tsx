@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Download, X, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
@@ -55,6 +55,13 @@ const PHASE_STYLE: Record<string, string> = {
   'Scaling':    'bg-amber-50 text-amber-700',
   'Production': 'bg-emerald-50 text-emerald-700',
 }
+
+const CSG_STYLE: Record<string, string> = {
+  'Consumer':  'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
+  'Business':  'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
+  'Corporate': 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/30',
+}
+function csgStyle(csg: string) { return CSG_STYLE[csg] ?? 'bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-400/30' }
 
 function asPct(val: number, min: number, max: number) {
   return `${Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)).toFixed(2)}%`
@@ -226,35 +233,70 @@ function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' 
 function FunctionalAreaPicker({ areas, value, onChange }: {
   areas: string[]; value: string | null; onChange: (v: string | null) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   const active = value !== null
+
+  useEffect(() => {
+    if (!open) return
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
   return (
-    <div className={clsx(
-      'flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-all duration-200',
-      active ? 'bg-violet-50 border-violet-300' : 'bg-white border-gray-200 hover:border-gray-300',
-    )}>
-      <span className={clsx('text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap',
-        active ? 'text-violet-500' : 'text-gray-400'
-      )}>Area</span>
-      <div className="w-px h-3.5 bg-gray-200" />
-      <div className="relative flex items-center">
-        <select
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value || null)}
-          className={clsx(
-            'appearance-none pr-5 text-xs font-semibold bg-transparent cursor-pointer focus:outline-none',
-            active ? 'text-violet-700' : 'text-gray-600'
-          )}
-        >
-          <option value="">All</option>
-          {areas.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+    <div ref={ref} className="relative">
+      <div
+        onClick={() => setOpen(o => !o)}
+        className={clsx(
+          'flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm cursor-pointer transition-all duration-200 select-none',
+          active ? 'bg-violet-50 border-violet-300' : 'bg-white border-gray-200 hover:border-gray-300',
+          open && 'ring-2 ring-violet-100',
+        )}
+      >
+        <span className={clsx('text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap',
+          active ? 'text-violet-500' : 'text-gray-400'
+        )}>Area</span>
+        <div className="w-px h-3.5 bg-gray-200" />
+        <span className={clsx('text-xs font-semibold whitespace-nowrap max-w-[180px] truncate',
+          active ? 'text-violet-700' : 'text-gray-400'
+        )}>
+          {value ?? 'All'}
+        </span>
         {active
-          ? <button onClick={e => { e.stopPropagation(); onChange(null) }} className="absolute right-0 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-700 transition-colors">
-              <X size={12} />
-            </button>
-          : <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          ? <button
+              onClick={e => { e.stopPropagation(); onChange(null); setOpen(false) }}
+              className="text-violet-400 hover:text-violet-700 transition-colors ml-0.5 flex-shrink-0"
+            ><X size={12} /></button>
+          : <ChevronDown size={11} className={clsx('text-gray-400 transition-transform duration-200 ml-0.5 flex-shrink-0', open && 'rotate-180')} />
         }
       </div>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+          {/* max-h fits exactly 10 items (each ~32px) then scrolls */}
+          <div className="overflow-y-auto max-h-[320px]">
+            <button
+              className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors',
+                value === null ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:bg-gray-50'
+              )}
+              onClick={() => { onChange(null); setOpen(false) }}
+            >All areas</button>
+            <div className="h-px bg-gray-100 mx-3" />
+            {areas.map(a => (
+              <button
+                key={a}
+                className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors truncate',
+                  value === a ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-violet-50 hover:text-violet-700'
+                )}
+                onClick={() => { onChange(a); setOpen(false) }}
+              >{a}</button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -572,13 +614,27 @@ export function OverviewTab() {
   const kpiBreakdown = data?.kpiBreakdown
   const costVal      = tileVals?.[0]?.value ?? '…'
 
-  // Derive sorted unique functional areas from all use cases
-  const uniqueAreas: string[] = (() => {
-    if (!drill?.byUseCase) return []
-    const set = new Set<string>()
-    for (const u of drill.byUseCase) { if (u.functionalArea) set.add(u.functionalArea) }
-    return [...set].sort((a, b) => a.localeCompare(b))
+  // Derive sorted unique functional areas + CSG mapping from all use cases
+  const { uniqueAreas, areaToCsgs } = (() => {
+    if (!drill?.byUseCase) return { uniqueAreas: [], areaToCsgs: {} as Record<string, string[]> }
+    const areaSet = new Set<string>()
+    const csgMap: Record<string, Set<string>> = {}
+    for (const u of drill.byUseCase) {
+      if (u.functionalArea) {
+        areaSet.add(u.functionalArea)
+        if (u.csg) {
+          if (!csgMap[u.functionalArea]) csgMap[u.functionalArea] = new Set()
+          csgMap[u.functionalArea].add(u.csg)
+        }
+      }
+    }
+    return {
+      uniqueAreas: [...areaSet].sort((a, b) => a.localeCompare(b)),
+      areaToCsgs:  Object.fromEntries(Object.entries(csgMap).map(([k, v]) => [k, [...v].sort()])),
+    }
   })()
+
+  const selectedCsgs = selectedFunctionalArea ? (areaToCsgs[selectedFunctionalArea] ?? []) : []
 
   // Compute FA contribution for every KPI tile
   const faContribs: Record<string, FaContrib | null> = (() => {
@@ -737,16 +793,29 @@ export function OverviewTab() {
 
       {/* ── Lower section ─────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-end justify-between px-1">
+        <div className="flex items-start justify-between px-1">
           <div>
             <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
             <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
           </div>
-          <FunctionalAreaPicker
-            areas={uniqueAreas}
-            value={selectedFunctionalArea}
-            onChange={setSelectedFunctionalArea}
-          />
+          <div className="flex flex-col items-end gap-2">
+            <FunctionalAreaPicker
+              areas={uniqueAreas}
+              value={selectedFunctionalArea}
+              onChange={setSelectedFunctionalArea}
+            />
+            {selectedFunctionalArea && selectedCsgs.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold tracking-[0.14em] text-gray-400 uppercase">CSG</span>
+                <div className="w-px h-3 bg-gray-200" />
+                {selectedCsgs.map(csg => (
+                  <span key={csg} className={clsx('text-xs font-semibold px-2.5 py-0.5 rounded-full', csgStyle(csg))}>
+                    {csg}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {isLoading || !drill

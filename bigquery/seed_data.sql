@@ -26,58 +26,7 @@ VALUES
   ('YTD', 'efficiency', 36.0, 32.0,  4.0, 'vs Q4',   CURRENT_TIMESTAMP());
 
 
--- ── 2. Dimension Metrics — YTD ────────────────────────────────────────────────
-
-INSERT INTO `ai_ambitions.ai_amb_dimension_metrics`
-  (period, metric_id, dimension_type, dimension_name, actual_value, plan_value, update_ts)
-VALUES
-  ('YTD', 'cost', 'category', 'Foundation Model Inference', 16.6, 18.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'category', 'Cloud Compute & Storage',    10.4, 11.2, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'category', 'Data Labeling & Ops',         5.1,  5.8, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'category', 'Platform & MLOps Tooling',    3.7,  4.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'category', 'Talent Allocation',            2.7,  3.2, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'Google Cloud (Vertex AI)',    12.8, 14.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'OpenAI / Azure OpenAI',        8.8,  9.5, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'AWS Bedrock',                   6.8,  7.2, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'Scale AI (Data Labeling)',      5.1,  5.8, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'Databricks',                    2.9,  3.2, CURRENT_TIMESTAMP()),
-  ('YTD', 'cost', 'vendor', 'Others',                        2.1,  2.5, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Foundation Model Inference', 0.80, 0.92, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Cloud Compute & Storage',    0.48, 0.55, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Data Labeling & Ops',        0.38, 0.44, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Platform & MLOps Tooling',   0.25, 0.29, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'category', 'Talent Allocation',           0.19, 0.22, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Google Cloud (Vertex AI)',    0.72, 0.83, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'OpenAI / Azure OpenAI',       0.65, 0.75, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'AWS Bedrock',                  0.31, 0.36, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Scale AI (Data Labeling)',     0.22, 0.25, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Databricks',                   0.12, 0.14, CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue', 'vendor', 'Others',                       0.08, 0.09, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Foundation Model Inference', 1.20, 1.05, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Cloud Compute & Storage',    0.72, 0.63, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Data Labeling & Ops',        0.58, 0.51, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Platform & MLOps Tooling',   0.50, 0.44, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'category', 'Talent Allocation',           0.40, 0.35, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Google Cloud (Vertex AI)',    1.22, 1.07, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'OpenAI / Azure OpenAI',       1.02, 0.90, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'AWS Bedrock',                  0.58, 0.51, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Scale AI (Data Labeling)',     0.32, 0.28, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Databricks',                   0.18, 0.16, CURRENT_TIMESTAMP()),
-  ('YTD', 'nps', 'vendor', 'Others',                       0.08, 0.07, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Foundation Model Inference', 12.0, 10.5, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Cloud Compute & Storage',     8.0,  7.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Data Labeling & Ops',          6.5,  5.7, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Platform & MLOps Tooling',     5.5,  4.8, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'category', 'Talent Allocation',             4.0,  3.5, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'Google Cloud (Vertex AI)',    12.8, 11.2, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'OpenAI / Azure OpenAI',        9.2,  8.0, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'AWS Bedrock',                   7.0,  6.1, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'Scale AI (Data Labeling)',      4.0,  3.5, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'Databricks',                    2.2,  1.9, CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 'vendor', 'Others',                        0.8,  0.7, CURRENT_TIMESTAMP());
-
-
--- ── 3. Use Case Data — YTD ───────────────────────────────────────────────────
+-- ── 2. Use Case Data — YTD ───────────────────────────────────────────────────
 -- revenue_actual_dollars = revenue_actual × 20 ($M, ~$2B revenue base)
 -- revenue_plan_dollars   = revenue_plan   × 20
 
