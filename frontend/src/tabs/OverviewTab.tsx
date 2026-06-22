@@ -56,12 +56,6 @@ const PHASE_STYLE: Record<string, string> = {
   'Production': 'bg-emerald-50 text-emerald-700',
 }
 
-const CSG_STYLE: Record<string, string> = {
-  'Consumer':  'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
-  'Business':  'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
-  'Corporate': 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/30',
-}
-function csgStyle(csg: string) { return CSG_STYLE[csg] ?? 'bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-400/30' }
 
 function asPct(val: number, min: number, max: number) {
   return `${Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)).toFixed(2)}%`
@@ -228,10 +222,10 @@ function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' 
   return <span className="text-xs text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
 }
 
-// ── Functional area picker ────────────────────────────────────────────────────
+// ── Filter picker (reused for Area and CSG dropdowns) ────────────────────────
 
-function FunctionalAreaPicker({ areas, value, onChange }: {
-  areas: string[]; value: string | null; onChange: (v: string | null) => void
+function FilterPicker({ label, items, value, onChange }: {
+  label: string; items: string[]; value: string | null; onChange: (v: string | null) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -258,9 +252,9 @@ function FunctionalAreaPicker({ areas, value, onChange }: {
       >
         <span className={clsx('text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap',
           active ? 'text-violet-500' : 'text-gray-400'
-        )}>Area</span>
+        )}>{label}</span>
         <div className="w-px h-3.5 bg-gray-200" />
-        <span className={clsx('text-xs font-semibold whitespace-nowrap max-w-[180px] truncate',
+        <span className={clsx('text-xs font-semibold whitespace-nowrap max-w-[160px] truncate',
           active ? 'text-violet-700' : 'text-gray-400'
         )}>
           {value ?? 'All'}
@@ -275,24 +269,23 @@ function FunctionalAreaPicker({ areas, value, onChange }: {
       </div>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 w-64 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-          {/* max-h fits exactly 10 items (each ~32px) then scrolls */}
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-60 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
           <div className="overflow-y-auto max-h-[320px]">
             <button
               className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors',
                 value === null ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:bg-gray-50'
               )}
               onClick={() => { onChange(null); setOpen(false) }}
-            >All areas</button>
+            >All</button>
             <div className="h-px bg-gray-100 mx-3" />
-            {areas.map(a => (
+            {items.map(item => (
               <button
-                key={a}
+                key={item}
                 className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors truncate',
-                  value === a ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-violet-50 hover:text-violet-700'
+                  value === item ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-violet-50 hover:text-violet-700'
                 )}
-                onClick={() => { onChange(a); setOpen(false) }}
-              >{a}</button>
+                onClick={() => { onChange(item); setOpen(false) }}
+              >{item}</button>
             ))}
           </div>
         </div>
@@ -329,10 +322,10 @@ function DescriptionPopover({ text }: { text: string }) {
 
 // ── Use case widget ───────────────────────────────────────────────────────────
 
-function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, filterArea }: {
+function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, filterArea, filterCsg, allowedUseCases }: {
   drill: DrillData; vsPlan: boolean
   kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
-  filterArea?: string | null
+  filterArea?: string | null; filterCsg?: string | null; allowedUseCases?: Set<string> | null
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
@@ -353,7 +346,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
   // ── KPI metric mode ────────────────────────────────────────────────────────
   if (kpiDrill) {
     const allItems = kpiDrill.byUseCase
-    const visibleItems = filterArea ? allItems.filter(i => i.functionalArea === filterArea) : allItems
+    const visibleItems = allItems.filter(i => {
+      if (filterArea && i.functionalArea !== filterArea) return false
+      if (allowedUseCases && !allowedUseCases.has(i.label)) return false
+      return true
+    })
     const items = [...visibleItems].sort((a, b) => {
       if (sort.key === 'label')         return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
       if (sort.key === 'value')         return sort.dir === 'asc' ? a.value - b.value : b.value - a.value
@@ -364,8 +361,9 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
     })
     const maxBar     = items.reduce((m, i) => Math.max(m, i.value), 0) || 1
     const hasDollars = items.some(i => i.dollarValue != null)
-    const heading    = filterArea
-      ? `${items.length} use cases · ${filterArea}`
+    const activeFilters = [filterArea, filterCsg].filter(Boolean)
+    const heading = activeFilters.length > 0
+      ? `${items.length} use cases · ${activeFilters.join(' · ')}`
       : `All ${items.length} use cases`
 
     function fmtDisplayVal(uc: typeof items[number]) {
@@ -458,7 +456,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
               <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
                 <X size={16} className="text-gray-400" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No use cases in {filterArea}</p>
+              <p className="text-sm font-semibold text-gray-500">No use cases match the selected filters</p>
               <p className="text-xs text-gray-400 mt-1">for this KPI metric</p>
             </div>
           )}
@@ -469,7 +467,10 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
 
   // ── AI Cost mode ───────────────────────────────────────────────────────────
   const allCostItems = drill.byUseCase
-  const visibleCostItems = filterArea ? allCostItems.filter(u => u.functionalArea === filterArea) : allCostItems
+  const visibleCostItems = allCostItems.filter(u =>
+    (!filterArea || u.functionalArea === filterArea) &&
+    (!filterCsg  || u.csg === filterCsg)
+  )
   const items = [...visibleCostItems].sort((a, b) => {
     if (sort.key === 'name')           return sort.dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
     if (sort.key === 'amount')         return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
@@ -478,7 +479,10 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
     if (sort.key === 'plan') { const ap = a.plan ?? -1; const bp = b.plan ?? -1; return sort.dir === 'asc' ? ap - bp : bp - ap }
     return 0
   })
-  const heading   = filterArea ? `${items.length} use cases · ${filterArea}` : `All ${items.length} use cases`
+  const activeFilters = [filterArea, filterCsg].filter(Boolean)
+  const heading = activeFilters.length > 0
+    ? `${items.length} use cases · ${activeFilters.join(' · ')}`
+    : `All ${items.length} use cases`
 
   return (
     <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
@@ -567,7 +571,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
             <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
               <X size={16} className="text-gray-400" />
             </div>
-            <p className="text-sm font-semibold text-gray-500">No use cases in {filterArea}</p>
+            <p className="text-sm font-semibold text-gray-500">No use cases match the selected filters</p>
           </div>
         )}
       </div>
@@ -599,8 +603,9 @@ export function OverviewTab() {
   const [period,              setPeriod]              = useState<Period>('YTD')
   const [vsPlan,              setVsPlan]              = useState(false)
   const [exporting,           setExporting]           = useState(false)
-  const [selectedKpi,         setSelectedKpi]         = useState<string>('revenue')
+  const [selectedKpi,            setSelectedKpi]            = useState<string>('revenue')
   const [selectedFunctionalArea, setSelectedFunctionalArea] = useState<string | null>(null)
+  const [selectedCsg,            setSelectedCsg]            = useState<string | null>(null)
 
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['overview', period],
@@ -614,31 +619,60 @@ export function OverviewTab() {
   const kpiBreakdown = data?.kpiBreakdown
   const costVal      = tileVals?.[0]?.value ?? '…'
 
-  // Derive sorted unique functional areas + CSG mapping from all use cases
-  const { uniqueAreas, areaToCsgs } = (() => {
-    if (!drill?.byUseCase) return { uniqueAreas: [], areaToCsgs: {} as Record<string, string[]> }
-    const areaSet = new Set<string>()
-    const csgMap: Record<string, Set<string>> = {}
-    for (const u of drill.byUseCase) {
-      if (u.functionalArea) {
-        areaSet.add(u.functionalArea)
-        if (u.csg) {
-          if (!csgMap[u.functionalArea]) csgMap[u.functionalArea] = new Set()
-          csgMap[u.functionalArea].add(u.csg)
-        }
-      }
-    }
-    return {
-      uniqueAreas: [...areaSet].sort((a, b) => a.localeCompare(b)),
-      areaToCsgs:  Object.fromEntries(Object.entries(csgMap).map(([k, v]) => [k, [...v].sort()])),
-    }
+  const allBaseUC = drill?.byUseCase ?? []
+
+  // Available areas: all areas, narrowed when CSG is selected
+  const availableAreas = [...new Set(
+    allBaseUC
+      .filter(u => !selectedCsg || u.csg === selectedCsg)
+      .map(u => u.functionalArea)
+      .filter((v): v is string => Boolean(v))
+  )].sort((a, b) => a.localeCompare(b))
+
+  // Available CSGs: all CSGs, narrowed when Area is selected
+  const availableCsgs = [...new Set(
+    allBaseUC
+      .filter(u => !selectedFunctionalArea || u.functionalArea === selectedFunctionalArea)
+      .map(u => u.csg)
+      .filter((v): v is string => Boolean(v))
+  )].sort((a, b) => a.localeCompare(b))
+
+  // Cross-reference set: use case names matching both active filters (for KPI metric mode)
+  const allowedUseCases: Set<string> | null = (() => {
+    if (!selectedFunctionalArea && !selectedCsg) return null
+    return new Set(
+      allBaseUC
+        .filter(u =>
+          (!selectedFunctionalArea || u.functionalArea === selectedFunctionalArea) &&
+          (!selectedCsg || u.csg === selectedCsg)
+        )
+        .map(u => u.name)
+    )
   })()
 
-  const selectedCsgs = selectedFunctionalArea ? (areaToCsgs[selectedFunctionalArea] ?? []) : []
+  // Handlers with auto-reset of the other filter if it becomes invalid
+  function handleAreaChange(area: string | null) {
+    setSelectedFunctionalArea(area)
+    if (area && selectedCsg) {
+      const valid = new Set(allBaseUC.filter(u => u.functionalArea === area).map(u => u.csg))
+      if (!valid.has(selectedCsg)) setSelectedCsg(null)
+    }
+  }
+  function handleCsgChange(csg: string | null) {
+    setSelectedCsg(csg)
+    if (csg && selectedFunctionalArea) {
+      const valid = new Set(allBaseUC.filter(u => u.csg === csg).map(u => u.functionalArea))
+      if (!valid.has(selectedFunctionalArea)) setSelectedFunctionalArea(null)
+    }
+  }
 
-  // Compute FA contribution for every KPI tile
+  // Combined filter label shown on KPI cards
+  const filterLabel = [selectedFunctionalArea, selectedCsg].filter(Boolean).join(' · ') || null
+
+  // KPI card contribution for the active filter combination
+  const hasFilter = !!(selectedFunctionalArea || selectedCsg)
   const faContribs: Record<string, FaContrib | null> = (() => {
-    if (!selectedFunctionalArea || !data || !tileVals) return {}
+    if (!hasFilter || !data || !tileVals) return {}
     const result: Record<string, FaContrib | null> = {}
 
     for (const m of TILE_META) {
@@ -649,28 +683,32 @@ export function OverviewTab() {
       let sum = 0; let dollarSum: number | null = null
 
       if (m.id === 'ai-cost') {
-        sum = (data.investment.byUseCase)
-          .filter(u => u.functionalArea === selectedFunctionalArea)
+        sum = data.investment.byUseCase
+          .filter(u =>
+            (!selectedFunctionalArea || u.functionalArea === selectedFunctionalArea) &&
+            (!selectedCsg || u.csg === selectedCsg)
+          )
           .reduce((s, u) => s + u.amount, 0)
       } else {
-        const kpiKey  = m.id as 'revenue' | 'nps' | 'efficiency'
+        const kpiKey   = m.id as 'revenue' | 'nps' | 'efficiency'
         const kpiItems = data.kpiBreakdown[kpiKey].byUseCase
-        sum = kpiItems
-          .filter(i => i.functionalArea === selectedFunctionalArea)
-          .reduce((s, i) => s + i.value, 0)
+        const filtered = allowedUseCases
+          ? kpiItems.filter(i => allowedUseCases.has(i.label))
+          : kpiItems
+        sum = filtered.reduce((s, i) => s + i.value, 0)
         if (m.id === 'revenue') {
-          dollarSum = kpiItems
-            .filter(i => i.functionalArea === selectedFunctionalArea && i.dollarValue != null)
+          dollarSum = filtered
+            .filter(i => i.dollarValue != null)
             .reduce((s, i) => s + (i.dollarValue ?? 0), 0)
         }
       }
 
       const pct = kpiTotal > 0 ? Math.min(100, (sum / kpiTotal) * 100) : 0
       let rawValue = ''
-      if (m.id === 'ai-cost')    rawValue = `$${sum.toFixed(1)}M invested`
-      else if (m.id === 'revenue')    rawValue = `${sum.toFixed(2)}% growth`
-      else if (m.id === 'nps')        rawValue = `${sum.toFixed(2)} pts`
-      else                            rawValue = `${sum.toFixed(1)}% gain`
+      if      (m.id === 'ai-cost')   rawValue = `$${sum.toFixed(1)}M invested`
+      else if (m.id === 'revenue')   rawValue = `${sum.toFixed(2)}% growth`
+      else if (m.id === 'nps')       rawValue = `${sum.toFixed(2)} pts`
+      else                           rawValue = `${sum.toFixed(1)}% gain`
 
       result[m.id] = {
         pct,
@@ -776,7 +814,7 @@ export function OverviewTab() {
                 isSelected={selectedKpi === TILE_META[i].id}
                 onClick={() => setSelectedKpi(TILE_META[i].id)}
                 faContrib={faContribs[TILE_META[i].id]}
-                selectedFA={selectedFunctionalArea}
+                selectedFA={filterLabel}
               />
             ))}
             <div className="bg-black self-stretch" />
@@ -785,7 +823,7 @@ export function OverviewTab() {
               isSelected={selectedKpi === TILE_META[0].id}
               onClick={() => setSelectedKpi(TILE_META[0].id)}
               faContrib={faContribs[TILE_META[0].id]}
-              selectedFA={selectedFunctionalArea}
+              selectedFA={filterLabel}
             />
           </>
         )}
@@ -798,23 +836,19 @@ export function OverviewTab() {
             <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
             <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <FunctionalAreaPicker
-              areas={uniqueAreas}
+          <div className="flex items-center gap-2">
+            <FilterPicker
+              label="Area"
+              items={availableAreas}
               value={selectedFunctionalArea}
-              onChange={setSelectedFunctionalArea}
+              onChange={handleAreaChange}
             />
-            {selectedFunctionalArea && selectedCsgs.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold tracking-[0.14em] text-gray-400 uppercase">CSG</span>
-                <div className="w-px h-3 bg-gray-200" />
-                {selectedCsgs.map(csg => (
-                  <span key={csg} className={clsx('text-xs font-semibold px-2.5 py-0.5 rounded-full', csgStyle(csg))}>
-                    {csg}
-                  </span>
-                ))}
-              </div>
-            )}
+            <FilterPicker
+              label="CSG"
+              items={availableCsgs}
+              value={selectedCsg}
+              onChange={handleCsgChange}
+            />
           </div>
         </div>
 
@@ -824,6 +858,8 @@ export function OverviewTab() {
               drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill}
               unit={unit} kpiTotal={kpiTotalVal}
               filterArea={selectedFunctionalArea}
+              filterCsg={selectedCsg}
+              allowedUseCases={allowedUseCases}
             />
         }
       </div>
