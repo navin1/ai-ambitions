@@ -329,13 +329,16 @@ function DescriptionPopover({ text }: { text: string }) {
 
 // ── Use case widget ───────────────────────────────────────────────────────────
 
-function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, filterArea, filterCsg, allowedUseCases }: {
+function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTotal = 0, filterArea, filterCsg, useCaseToCsg = {} }: {
   drill: DrillData; vsPlan: boolean
-  kpiDrill?: KpiDrillData | null; unit?: string; kpiTotal?: number
-  filterArea?: string | null; filterCsg?: string | null; allowedUseCases?: Set<string> | null
+  kpiDrill?: KpiDrillData | null; selectedKpi?: string; kpiTotal?: number
+  filterArea?: string | null; filterCsg?: string | null; useCaseToCsg?: Record<string, string | null>
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'rank', dir: 'asc' })
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(() => ({
+    key: kpiDrill ? 'value' : 'amount',
+    dir: 'desc',
+  }))
 
   function handleSort(key: string) {
     setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -355,7 +358,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
     const allItems = kpiDrill.byUseCase
     const visibleItems = allItems.filter(i => {
       if (filterArea && i.functionalArea !== filterArea) return false
-      if (allowedUseCases && !allowedUseCases.has(i.label)) return false
+      if (filterCsg && useCaseToCsg[i.label] !== filterCsg) return false
       return true
     })
     const items = [...visibleItems].sort((a, b) => {
@@ -367,26 +370,33 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
       return 0
     })
     const maxBar     = items.reduce((m, i) => Math.max(m, i.value), 0) || 1
-    const hasDollars = items.some(i => i.dollarValue != null)
     const activeFilters = [filterArea, filterCsg].filter(Boolean)
     const heading = activeFilters.length > 0
       ? `${items.length} use cases · ${activeFilters.join(' · ')}`
       : `All ${items.length} use cases`
 
     function fmtDisplayVal(uc: typeof items[number]) {
-      if (hasDollars && uc.dollarValue != null) return `$${uc.dollarValue.toFixed(1)}M`
-      return fmtVal(uc.value, unit)
+      if (selectedKpi === 'revenue') {
+        const v = uc.dollarValue ?? uc.value * 20
+        return `$${v.toFixed(1)}M`
+      }
+      if (selectedKpi === 'nps') return `${uc.value.toFixed(2)} pts`
+      return `${uc.value.toFixed(1)}%`
     }
     function fmtDisplayPlan(uc: typeof items[number]) {
-      if (hasDollars && uc.dollarPlan != null) return `$${uc.dollarPlan.toFixed(1)}M`
-      return fmtVal(uc.plan ?? 0, unit)
+      if (selectedKpi === 'revenue') {
+        const p = uc.dollarPlan ?? (uc.plan != null ? uc.plan * 20 : null)
+        return p != null ? `$${p.toFixed(1)}M` : '—'
+      }
+      if (selectedKpi === 'nps') return `${(uc.plan ?? 0).toFixed(2)} pts`
+      return `${(uc.plan ?? 0).toFixed(1)}%`
     }
 
     return (
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
           <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">
-            {heading} — {unit === 'pts' ? 'NPS impact' : 'metric impact'}
+            {heading} — {selectedKpi === 'nps' ? 'NPS impact' : selectedKpi === 'revenue' ? 'revenue impact ($M)' : 'efficiency gain (%)'}
           </p>
         </div>
         <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
@@ -404,7 +414,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, unit = '$M', kpiTotal = 0, fil
             <SortIcon sortState={sort} colKey="functionalArea" />
           </div>
           <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('value')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">{hasDollars ? '$M' : unit}</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400">{selectedKpi === 'revenue' ? '$M' : selectedKpi === 'nps' ? 'pts' : '%'}</span>
             <SortIcon sortState={sort} colKey="value" />
           </div>
           {vsPlan && (
@@ -646,10 +656,9 @@ function SummaryWidget({
   }
 
   function fmtVal(v: number): string {
-    if (isSpend)                      return `$${v.toFixed(1)}M`
+    if (isSpend || selectedKpi === 'revenue') return `$${(isSpend ? v : v * 20).toFixed(1)}M`
     if (selectedKpi === 'nps')        return `${v.toFixed(2)} pts`
-    if (selectedKpi === 'efficiency') return `${v.toFixed(1)}%`
-    return `${v.toFixed(2)}%`
+    return `${v.toFixed(1)}%`
   }
 
   if (rows.length === 0) {
@@ -661,7 +670,7 @@ function SummaryWidget({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-5 flex flex-col h-[36rem]">
+    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-5 flex flex-col">
       <div className="mb-3 pb-3 border-b border-gray-100">
         <p className="text-sm font-black tracking-tight">
           <span className="text-gray-400">{kpiLabel}</span>
@@ -687,7 +696,7 @@ function SummaryWidget({
         )}
       </div>
 
-      <div className="space-y-5 overflow-y-auto flex-1 min-h-0 pr-3">
+      <div className="space-y-5 overflow-y-auto max-h-[28rem] pr-3">
         {sorted.map((r, idx) => {
           const barW       = `${(r.actual / maxActual) * 100}%`
           const color      = valueColor(r)
@@ -740,7 +749,7 @@ export function OverviewTab() {
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['overview', period],
     queryFn:  () => fetchOverviewSummary(period),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     placeholderData: (prev) => prev,
   })
 
@@ -767,23 +776,17 @@ export function OverviewTab() {
       .filter((v): v is string => Boolean(v))
   )].sort((a, b) => a.localeCompare(b))
 
-  // Cross-reference set: use case names matching both active filters (for KPI metric mode)
-  const allowedUseCases: Set<string> | null = (() => {
-    if (!selectedFunctionalArea && !selectedCsg) return null
-    return new Set(
-      allBaseUC
-        .filter(u =>
-          (!selectedFunctionalArea || u.functionalArea === selectedFunctionalArea) &&
-          (!selectedCsg || u.csg === selectedCsg)
-        )
-        .map(u => u.name)
-    )
-  })()
-
-  // use-case → CSG lookup for right widget (KPI modes don't carry csg column)
+  // use-case → CSG lookup (KPI breakdown view doesn't carry the csg column)
   const useCaseToCsg: Record<string, string | null> = Object.fromEntries(
     allBaseUC.map(u => [u.name, u.csg ?? null])
   )
+
+  // Helper: does a KPI item pass both active filters?
+  function kpiItemMatchesFilters(label: string, functionalArea: string | null | undefined): boolean {
+    if (selectedFunctionalArea && functionalArea !== selectedFunctionalArea) return false
+    if (selectedCsg && useCaseToCsg[label] !== selectedCsg) return false
+    return true
+  }
 
   // Handlers with auto-reset of the other filter if it becomes invalid
   function handleAreaChange(area: string | null) {
@@ -829,8 +832,8 @@ export function OverviewTab() {
       } else {
         const kpiKey   = m.id as 'revenue' | 'nps' | 'efficiency'
         const kpiItems = data.kpiBreakdown[kpiKey].byUseCase
-        const filtered = allowedUseCases
-          ? kpiItems.filter(i => allowedUseCases.has(i.label))
+        const filtered = hasFilter
+          ? kpiItems.filter(i => kpiItemMatchesFilters(i.label, i.functionalArea))
           : kpiItems
         sum = filtered.reduce((s, i) => s + i.value, 0)
         if (m.id === 'revenue') {
@@ -868,7 +871,6 @@ export function OverviewTab() {
 
   const isSpendView = selectedKpi === 'ai-cost'
   const kpiDrill    = !isSpendView ? kpiBreakdown?.[selectedKpi as 'revenue' | 'nps' | 'efficiency'] ?? null : null
-  const unit        = selectedKpi === 'nps' ? 'pts' : isSpendView ? '$M' : '%'
   const kpiTotalVal = tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0
 
   // When exactly one filter is active, lock the dimension to match that filter.
@@ -904,12 +906,16 @@ export function OverviewTab() {
     } else {
       const kpiKey = selectedKpi as 'revenue' | 'nps' | 'efficiency'
       for (const i of data.kpiBreakdown[kpiKey].byUseCase) {
-        if (allowedUseCases && !allowedUseCases.has(i.label)) continue
+        if (!kpiItemMatchesFilters(i.label, i.functionalArea)) continue
         addToMap(
           effectiveRightDimension === 'area' ? i.functionalArea : (useCaseToCsg[i.label] ?? null),
           i.value, i.plan ?? null,
         )
       }
+    }
+    if (map.size === 0 && (selectedFunctionalArea || selectedCsg)) {
+      const fallbackKey = effectiveRightDimension === 'area' ? selectedFunctionalArea : selectedCsg
+      if (fallbackKey) map.set(fallbackKey, { actual: 0, planSum: 0, planCount: 0 })
     }
     return [...map.entries()]
       .map(([name, { actual, planSum, planCount }]) => ({ name, actual, plan: planCount > 0 ? planSum : null }))
@@ -1039,11 +1045,12 @@ export function OverviewTab() {
             {isLoading || !drill
               ? <WidgetSkeleton />
               : <UseCaseWidget
+                  key={selectedKpi}
                   drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill}
-                  unit={unit} kpiTotal={kpiTotalVal}
+                  selectedKpi={selectedKpi} kpiTotal={kpiTotalVal}
                   filterArea={selectedFunctionalArea}
                   filterCsg={selectedCsg}
-                  allowedUseCases={allowedUseCases}
+                  useCaseToCsg={useCaseToCsg}
                 />
             }
           </div>
@@ -1051,6 +1058,7 @@ export function OverviewTab() {
             {isLoading || !drill
               ? <WidgetSkeleton />
               : <SummaryWidget
+                  key={selectedKpi}
                   rows={summaryRows}
                   dimension={effectiveRightDimension}
                   selectedKpi={selectedKpi}

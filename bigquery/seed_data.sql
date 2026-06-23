@@ -370,7 +370,7 @@ VALUES
 
   ('YTD', 'Legal Contract Review AI',
    'Extracts obligations and flags non-standard clauses in contracts for legal review.',
-   'Corporate', "Bloomingdale's - specific", 'In Experimentation (POC)',
+   'Corporate', 'Operations', 'Pilot',
    0.11, 0.12, NULL, NULL, NULL, NULL, NULL, NULL, 0.30, 0.26, CURRENT_TIMESTAMP()),
 
   -- ── Group E: Revenue + NPS (12 use cases) ────────────────────────────────
@@ -494,7 +494,7 @@ VALUES
 
   ('YTD', 'AI Contract Lifecycle Management',
    'End-to-end AI platform automating contract drafting, review, approval and renewal.',
-   'Corporate', "Bloomingdale's - specific", 'In Experimentation (POC)',
+   'Corporate', 'Operations', 'Pilot',
    0.26, 0.28, 0.04, 0.05, 0.8, 1.0, NULL, NULL, 0.35, 0.31, CURRENT_TIMESTAMP()),
 
   -- ── Group G: NPS + Efficiency (11 use cases) ─────────────────────────────

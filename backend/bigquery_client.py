@@ -38,7 +38,7 @@ KPI_ORDER = ["ai-cost", "revenue", "nps", "efficiency"]
 # Simple in-process cache for overview responses to speed repeated loads
 # keyed by period -> (timestamp, response_dict)
 _OVERVIEW_CACHE: dict[str, tuple[float, dict]] = {}
-_OVERVIEW_CACHE_TTL = 30.0  # seconds
+_OVERVIEW_CACHE_TTL = 0.0  # disabled — always fetch fresh from BigQuery
 
 
 # ── Credential / client helpers ───────────────────────────────────────────────
