@@ -245,14 +245,21 @@ function FilterPicker({ label, items, value, onChange }: {
       <div
         onClick={() => setOpen(o => !o)}
         className={clsx(
-          'flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm cursor-pointer transition-all duration-200 select-none',
+          'flex items-center gap-2 pl-1 pr-3 py-2 rounded-xl border shadow-sm cursor-pointer transition-all duration-200 select-none',
           active ? 'bg-violet-50 border-violet-300' : 'bg-white border-gray-200 hover:border-gray-300',
           open && 'ring-2 ring-violet-100',
         )}
       >
-        <span className={clsx('text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap',
-          active ? 'text-violet-500' : 'text-gray-400'
-        )}>{label}</span>
+        {/* Left label — toggle zone: clears filter when active, opens dropdown when inactive */}
+        <span
+          onClick={e => { e.stopPropagation(); active ? (onChange(null), setOpen(false)) : setOpen(o => !o) }}
+          className={clsx(
+            'text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap px-2 py-0.5 rounded-lg transition-all duration-150',
+            active
+              ? 'text-violet-600 bg-violet-100 hover:bg-violet-200 hover:text-violet-800 cursor-pointer'
+              : 'text-gray-700 hover:text-gray-900 cursor-pointer',
+          )}
+        >{label}</span>
         <div className="w-px h-3.5 bg-gray-200" />
         <span className={clsx('text-xs font-semibold whitespace-nowrap max-w-[160px] truncate',
           active ? 'text-violet-700' : 'text-gray-400'
@@ -597,6 +604,128 @@ function WidgetSkeleton() {
   )
 }
 
+// ── Summary widget (right panel, 30% width) ───────────────────────────────────
+
+type SummaryRow = { name: string; actual: number; plan: number | null }
+
+function SummaryWidget({
+  rows, dimension, selectedKpi, vsPlan, isSpend, kpiTotal,
+}: {
+  rows: SummaryRow[]
+  dimension: 'area' | 'csg'
+  selectedKpi: string
+  vsPlan: boolean
+  isSpend: boolean
+  kpiTotal: number
+}) {
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'actual', dir: 'desc' })
+
+  function handleSort(key: string) {
+    setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+  }
+
+  const dimLabel = dimension === 'area' ? 'Functional Area' : 'CSG'
+  const kpiLabel =
+    isSpend                    ? 'AI Cost'         :
+    selectedKpi === 'revenue'  ? 'Revenue Growth'  :
+    selectedKpi === 'nps'      ? 'NPS Improvement' : 'Efficiency Gain'
+
+  const sorted = [...rows].sort((a, b) => {
+    if (sort.key === 'name')   return sort.dir === 'asc' ? a.name.localeCompare(b.name)   : b.name.localeCompare(a.name)
+    if (sort.key === 'actual') return sort.dir === 'asc' ? a.actual - b.actual             : b.actual - a.actual
+    if (sort.key === 'plan')   { const ap = a.plan ?? -1; const bp = b.plan ?? -1; return sort.dir === 'asc' ? ap - bp : bp - ap }
+    return 0
+  })
+
+  const maxActual = sorted.reduce((m, r) => Math.max(m, r.actual), 0) || 1
+
+  function valueColor(r: SummaryRow): string {
+    if (!vsPlan || r.plan == null) return 'text-gray-900'
+    if (isSpend) return r.actual > r.plan ? 'text-rose-500' : r.actual < r.plan ? 'text-green-600' : 'text-gray-900'
+    return r.actual > r.plan ? 'text-green-600' : r.actual < r.plan ? 'text-rose-500' : 'text-gray-900'
+  }
+
+  function fmtVal(v: number): string {
+    if (isSpend)                      return `$${v.toFixed(1)}M`
+    if (selectedKpi === 'nps')        return `${v.toFixed(2)} pts`
+    if (selectedKpi === 'efficiency') return `${v.toFixed(1)}%`
+    return `${v.toFixed(2)}%`
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col items-center justify-center min-h-[14rem]">
+        <p className="text-sm font-semibold text-gray-400">No data</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-5 flex flex-col h-[36rem]">
+      <div className="mb-3 pb-3 border-b border-gray-100">
+        <p className="text-sm font-black tracking-tight">
+          <span className="text-gray-400">{kpiLabel}</span>
+          <span className="font-bold text-gray-400"> By </span>
+          <span className="text-gray-900">{dimLabel}</span>
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
+        <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('name')}>
+          <span className="text-xs font-bold tracking-wider text-gray-400">{dimLabel}</span>
+          <SortIcon sortState={sort} colKey="name" />
+        </div>
+        <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('actual')}>
+          <span className="text-xs font-bold tracking-wider text-gray-400">Actual</span>
+          <SortIcon sortState={sort} colKey="actual" />
+        </div>
+        {vsPlan && (
+          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+            <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
+            <SortIcon sortState={sort} colKey="plan" />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-5 overflow-y-auto flex-1 min-h-0 pr-3">
+        {sorted.map((r, idx) => {
+          const barW       = `${(r.actual / maxActual) * 100}%`
+          const color      = valueColor(r)
+          const isOver     = r.plan != null && r.actual > r.plan
+          const pctOfTotal = kpiTotal > 0 ? ((r.actual / kpiTotal) * 100).toFixed(0) : '—'
+          return (
+            <div key={r.name}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-sm font-semibold text-gray-700 flex-1 truncate min-w-0 leading-tight" title={r.name}>
+                  {r.name}
+                </span>
+                <span className={clsx('text-sm font-black tabular-nums shrink-0', color)}>
+                  {fmtVal(r.actual)}
+                </span>
+                {vsPlan && (
+                  <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
+                    {r.plan != null ? fmtVal(r.plan) : '—'}
+                  </span>
+                )}
+              </div>
+              <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={clsx(
+                    'absolute inset-y-0 left-0 rounded-full',
+                    isSpend && isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800',
+                  )}
+                  style={{ width: barW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${idx * 60}ms` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main tab ──────────────────────────────────────────────────────────────────
 
 export function OverviewTab() {
@@ -606,6 +735,7 @@ export function OverviewTab() {
   const [selectedKpi,            setSelectedKpi]            = useState<string>('revenue')
   const [selectedFunctionalArea, setSelectedFunctionalArea] = useState<string | null>(null)
   const [selectedCsg,            setSelectedCsg]            = useState<string | null>(null)
+  const [rightWidgetDimension,   setRightWidgetDimension]   = useState<'area' | 'csg'>('area')
 
   const { data, isLoading, isError, isFetching } = useQuery({
     queryKey: ['overview', period],
@@ -650,9 +780,15 @@ export function OverviewTab() {
     )
   })()
 
+  // use-case → CSG lookup for right widget (KPI modes don't carry csg column)
+  const useCaseToCsg: Record<string, string | null> = Object.fromEntries(
+    allBaseUC.map(u => [u.name, u.csg ?? null])
+  )
+
   // Handlers with auto-reset of the other filter if it becomes invalid
   function handleAreaChange(area: string | null) {
     setSelectedFunctionalArea(area)
+    setRightWidgetDimension('area')
     if (area && selectedCsg) {
       const valid = new Set(allBaseUC.filter(u => u.functionalArea === area).map(u => u.csg))
       if (!valid.has(selectedCsg)) setSelectedCsg(null)
@@ -660,6 +796,7 @@ export function OverviewTab() {
   }
   function handleCsgChange(csg: string | null) {
     setSelectedCsg(csg)
+    setRightWidgetDimension('csg')
     if (csg && selectedFunctionalArea) {
       const valid = new Set(allBaseUC.filter(u => u.csg === csg).map(u => u.functionalArea))
       if (!valid.has(selectedFunctionalArea)) setSelectedFunctionalArea(null)
@@ -733,6 +870,51 @@ export function OverviewTab() {
   const kpiDrill    = !isSpendView ? kpiBreakdown?.[selectedKpi as 'revenue' | 'nps' | 'efficiency'] ?? null : null
   const unit        = selectedKpi === 'nps' ? 'pts' : isSpendView ? '$M' : '%'
   const kpiTotalVal = tileVals?.[TILE_META.findIndex(m => m.id === selectedKpi)]?.current ?? 0
+
+  // When exactly one filter is active, lock the dimension to match that filter.
+  // When both or neither are active, respect the last label the user clicked.
+  const effectiveRightDimension: 'area' | 'csg' =
+    selectedCsg && !selectedFunctionalArea ? 'csg' :
+    selectedFunctionalArea && !selectedCsg ? 'area' :
+    rightWidgetDimension
+
+  // Summary rows for the right widget — grouped by area or CSG, filtered (Option B)
+  const summaryRows: SummaryRow[] = (() => {
+    if (!data) return []
+    const map = new Map<string, { actual: number; planSum: number; planCount: number }>()
+    function addToMap(key: string | null | undefined, actual: number, plan: number | null) {
+      if (!key) return
+      const e = map.get(key)
+      if (e) {
+        e.actual += actual
+        if (plan != null) { e.planSum += plan; e.planCount++ }
+      } else {
+        map.set(key, { actual, planSum: plan ?? 0, planCount: plan != null ? 1 : 0 })
+      }
+    }
+    if (isSpendView) {
+      for (const u of data.investment.byUseCase) {
+        if (selectedFunctionalArea && u.functionalArea !== selectedFunctionalArea) continue
+        if (selectedCsg && u.csg !== selectedCsg) continue
+        addToMap(
+          effectiveRightDimension === 'area' ? u.functionalArea : u.csg,
+          u.amount, u.plan ?? null,
+        )
+      }
+    } else {
+      const kpiKey = selectedKpi as 'revenue' | 'nps' | 'efficiency'
+      for (const i of data.kpiBreakdown[kpiKey].byUseCase) {
+        if (allowedUseCases && !allowedUseCases.has(i.label)) continue
+        addToMap(
+          effectiveRightDimension === 'area' ? i.functionalArea : (useCaseToCsg[i.label] ?? null),
+          i.value, i.plan ?? null,
+        )
+      }
+    }
+    return [...map.entries()]
+      .map(([name, { actual, planSum, planCount }]) => ({ name, actual, plan: planCount > 0 ? planSum : null }))
+      .sort((a, b) => b.actual - a.actual)
+  })()
 
   const sectionHeading = isSpendView ? 'AI Investment Breakdown' :
     selectedKpi === 'revenue'    ? 'Revenue Growth Breakdown'    :
@@ -852,16 +1034,33 @@ export function OverviewTab() {
           </div>
         </div>
 
-        {isLoading || !drill
-          ? <WidgetSkeleton />
-          : <UseCaseWidget
-              drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill}
-              unit={unit} kpiTotal={kpiTotalVal}
-              filterArea={selectedFunctionalArea}
-              filterCsg={selectedCsg}
-              allowedUseCases={allowedUseCases}
-            />
-        }
+        <div className="flex gap-4 items-start">
+          <div className="flex-[7] min-w-0">
+            {isLoading || !drill
+              ? <WidgetSkeleton />
+              : <UseCaseWidget
+                  drill={drill} vsPlan={vsPlan} kpiDrill={kpiDrill}
+                  unit={unit} kpiTotal={kpiTotalVal}
+                  filterArea={selectedFunctionalArea}
+                  filterCsg={selectedCsg}
+                  allowedUseCases={allowedUseCases}
+                />
+            }
+          </div>
+          <div className="flex-[3] min-w-0">
+            {isLoading || !drill
+              ? <WidgetSkeleton />
+              : <SummaryWidget
+                  rows={summaryRows}
+                  dimension={effectiveRightDimension}
+                  selectedKpi={selectedKpi}
+                  vsPlan={vsPlan}
+                  isSpend={isSpendView}
+                  kpiTotal={kpiTotalVal}
+                />
+            }
+          </div>
+        </div>
       </div>
     </div>
   )
