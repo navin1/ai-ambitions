@@ -352,6 +352,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
   }, [openPopover])
 
   const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
+  const kpiByName  = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.kpi]))
 
   // ── KPI metric mode ────────────────────────────────────────────────────────
   if (kpiDrill) {
@@ -434,13 +435,22 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
               <div key={uc.label}>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
-                  <div className="relative min-w-0 flex-1">
-                    <span
-                      className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
-                      title={uc.label}
-                      onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
-                    >{uc.label}</span>
-                    {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <span
+                        className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                        title={uc.label}
+                        onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
+                      >{uc.label}</span>
+                      {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {(kpiByName[uc.label] ?? '').split(',').filter(Boolean).map(tag => (
+                        <span key={tag} className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag))}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
                     title={uc.currentPhase ?? ''}>
