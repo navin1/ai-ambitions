@@ -357,9 +357,16 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
   // ── KPI metric mode ────────────────────────────────────────────────────────
   if (kpiDrill) {
     const allItems = kpiDrill.byUseCase
-    const visibleItems = allItems.filter(i => {
+    const _filtered = allItems.filter(i => {
       if (filterArea && i.functionalArea !== filterArea) return false
       if (filterCsg && useCaseToCsg[i.label] !== filterCsg) return false
+      return true
+    })
+    // Deduplicate by label so React keys are stable on sort
+    const _seenKpi = new Set<string>()
+    const visibleItems = _filtered.filter(i => {
+      if (_seenKpi.has(i.label)) return false
+      _seenKpi.add(i.label)
       return true
     })
     const items = [...visibleItems].sort((a, b) => {
@@ -494,10 +501,17 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
 
   // ── AI Cost mode ───────────────────────────────────────────────────────────
   const allCostItems = drill.byUseCase
-  const visibleCostItems = allCostItems.filter(u =>
+  const _filteredCost = allCostItems.filter(u =>
     (!filterArea || u.functionalArea === filterArea) &&
     (!filterCsg  || u.csg === filterCsg)
   )
+  // Deduplicate by name so React keys are stable on sort
+  const _seenCost = new Set<string>()
+  const visibleCostItems = _filteredCost.filter(u => {
+    if (_seenCost.has(u.name)) return false
+    _seenCost.add(u.name)
+    return true
+  })
   const items = [...visibleCostItems].sort((a, b) => {
     if (sort.key === 'name')           return sort.dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
     if (sort.key === 'amount')         return sort.dir === 'asc' ? a.amount - b.amount : b.amount - a.amount
