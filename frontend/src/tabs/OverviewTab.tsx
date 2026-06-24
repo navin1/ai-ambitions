@@ -671,7 +671,9 @@ function SummaryWidget({
     return 0
   })
 
-  const maxActual = sorted.reduce((m, r) => Math.max(m, r.actual), 0) || 1
+  const maxActual   = sorted.reduce((m, r) => Math.max(m, r.actual), 0) || 1
+  const rowTotal    = sorted.reduce((s, r) => s + r.actual, 0)
+  const totalForPct = selectedKpi === 'revenue' ? rowTotal : kpiTotal
 
   function valueColor(r: SummaryRow): string {
     if (!vsPlan || r.plan == null) return 'text-gray-900'
@@ -680,7 +682,7 @@ function SummaryWidget({
   }
 
   function fmtVal(v: number): string {
-    if (isSpend || selectedKpi === 'revenue') return `$${(isSpend ? v : v * 20).toFixed(1)}M`
+    if (isSpend || selectedKpi === 'revenue') return `$${v.toFixed(1)}M`
     if (selectedKpi === 'nps')        return `${v.toFixed(2)} pts`
     return `${v.toFixed(1)}%`
   }
@@ -725,7 +727,7 @@ function SummaryWidget({
           const barW       = `${(r.actual / maxActual) * 100}%`
           const color      = valueColor(r)
           const isOver     = r.plan != null && r.actual > r.plan
-          const pctOfTotal = kpiTotal > 0 ? ((r.actual / kpiTotal) * 100).toFixed(0) : '—'
+          const pctOfTotal = totalForPct > 0 ? ((r.actual / totalForPct) * 100).toFixed(0) : '—'
           return (
             <div key={r.name}>
               <div className="flex items-center gap-3 mb-2">
@@ -931,9 +933,15 @@ export function OverviewTab() {
       const kpiKey = selectedKpi as 'revenue' | 'nps' | 'efficiency'
       for (const i of data.kpiBreakdown[kpiKey].byUseCase) {
         if (!kpiItemMatchesFilters(i.label, i.functionalArea)) continue
+        const actualForRow = selectedKpi === 'revenue'
+          ? (i.dollarValue ?? i.value * 20)
+          : i.value
+        const planForRow = selectedKpi === 'revenue'
+          ? (i.dollarPlan ?? (i.plan != null ? i.plan * 20 : null))
+          : (i.plan ?? null)
         addToMap(
           effectiveRightDimension === 'area' ? i.functionalArea : (useCaseToCsg[i.label] ?? null),
-          i.value, i.plan ?? null,
+          actualForRow, planForRow,
         )
       }
     }
