@@ -114,6 +114,7 @@ def _build_chartjs_config(widget: dict) -> dict | None:
     color_field = widget.get('color_field')
     stacked = widget.get('stacked', False) or chart_type == 'stacked_bar'
     secondary_y = widget.get('secondary_y')
+    bar_color = widget.get('bar_color', None)
 
     if not data or chart_type in ('table', 'kpi'):
         return None
@@ -154,7 +155,8 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             labels = [str(r.get(x_key, '')) for r in data]
             datasets = [
                 {'label': k, 'data': [r.get(k, 0) for r in data],
-                 'backgroundColor': P[i % len(P)], 'borderRadius': 4}
+                 'backgroundColor': (bar_color if bar_color and i == 0 else P[i % len(P)]),
+                 'borderRadius': 4}
                 for i, k in enumerate(y_keys)
             ]
         opts = json.loads(json.dumps(base_opts))
@@ -164,6 +166,10 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             opts['indexAxis'] = 'y'
             opts['scales']['x']['grid'] = {'color': 'rgba(0,0,0,0.05)'}
             opts['scales']['y']['grid'] = {'display': False}
+            opts['scales']['y']['ticks'] = {'font': {'size': 7}, 'autoSkip': False}
+            for ds in datasets:
+                ds['maxBarThickness'] = 11
+                ds['borderRadius'] = 2
         return {'type': 'bar', 'data': {'labels': labels, 'datasets': datasets}, 'options': opts, '_money': is_money}
 
     if chart_type == 'line':
@@ -239,29 +245,50 @@ def _build_chartjs_config(widget: dict) -> dict | None:
     return None
 
 
-def _build_table_html(data: list, max_rows: int = 20) -> str:
+def _build_table_html(data: list, max_rows: int = 20, actual_col: str = '', plan_col: str = '', invert_color: bool = False) -> str:
     if not data:
         return ''
     headers = list(data[0].keys())
-    num_cols = {h for h in headers if isinstance(data[0].get(h), (int, float)) and not isinstance(data[0].get(h), bool)}
-    ra = 'style="text-align:right"'
+    num_set = {h for h in headers if isinstance(data[0].get(h), (int, float)) and not isinstance(data[0].get(h), bool)}
     heads = ''.join(
-        f'<th {ra}>{h.replace("_", " ")}</th>' if h in num_cols else f'<th>{h.replace("_", " ")}</th>'
+        f'<th style="text-align:right">{h.replace("_", " ")}</th>' if h in num_set
+        else f'<th>{h.replace("_", " ")}</th>'
         for h in headers
     )
-    rows = ''
+    body = ''
     for row in data[:max_rows]:
+        act_color = ''
+        if actual_col and plan_col:
+            av, pv = row.get(actual_col), row.get(plan_col)
+            if (isinstance(av, (int, float)) and not isinstance(av, bool) and
+                    isinstance(pv, (int, float)) and not isinstance(pv, bool)):
+                act_color = ('#16A34A' if av < pv else ('#DC2626' if av > pv else '')) if invert_color \
+                    else ('#DC2626' if av < pv else ('#16A34A' if av > pv else ''))
         cells = ''
         for h in headers:
             v = row.get(h, '')
-            hk = h.lower()
+            if v is None:
+                cells += '<td style="color:#94A3B8">—</td>'
+                continue
+            hk = h.lower().strip()
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                v = _fmt_dollars(v) if hk.endswith(('spend', 'dollars', 'amount', 'budget', 'account')) else _fmt_number(v)
-            align = ra if h in num_cols else ''
-            cells += f'<td {align}>{v}</td>'
-        rows += f'<tr>{cells}</tr>'
+                if hk == '$m' or ' $m' in hk or '($m)' in hk:
+                    v = f"${v:.1f}M"
+                elif hk == '%' or hk.endswith(' %') or '(%)' in hk:
+                    v = f"{v:.1f}%"
+                elif hk.endswith(('spend', 'dollars', 'amount', 'budget', 'account')):
+                    v = _fmt_dollars(v)
+                else:
+                    v = _fmt_number(v)
+            is_num = h in num_set
+            if h == actual_col and act_color:
+                s = ('text-align:right;' if is_num else '') + f'color:{act_color}'
+                cells += f'<td style="{s}">{v}</td>'
+            else:
+                cells += f'<td{" style=\"text-align:right\"" if is_num else ""}>{v}</td>'
+        body += f'<tr>{cells}</tr>'
     note = f'<p class="truncate-note">Showing top {max_rows} of {len(data)} rows</p>' if len(data) > max_rows else ''
-    return f'<div class="data-table"><table><thead><tr>{heads}</tr></thead><tbody>{rows}</tbody></table>{note}</div>'
+    return f'<div class="data-table"><table><thead><tr>{heads}</tr></thead><tbody>{body}</tbody></table>{note}</div>'
 
 
 def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, include_cover: bool = True) -> str:
@@ -273,6 +300,48 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
         chart_type = w.get('chart_type', 'table')
         data = w.get('data', [])
 
+        # ── multi_panel: 2×2 card grid (colored header + chart + table) ─────────
+        if chart_type == 'multi_panel':
+            panels = w.get('panels', [])
+            cards_html = ''
+            for pidx, panel in enumerate(panels):
+                pchart_id = f'chart_{idx}_{pidx}'
+                pcfg = _build_chartjs_config(panel)
+                pchart_html = ''
+                if pcfg:
+                    chart_configs.append({'id': pchart_id, 'config': pcfg})
+                    pchart_html = f'<canvas id="{pchart_id}"></canvas>'
+                pkpi   = panel.get('kpi_id', '').replace('-', '_')
+                ptitle = panel.get('title', '')
+                ptotal = panel.get('total_str', '')
+                ptable = _build_table_html(panel.get('table_data') or panel.get('data', []), max_rows=20)
+                cards_html += f'''<div class="mpanel-card">
+  <div class="mpanel-head {pkpi}">
+    <span class="mpanel-title {pkpi}">{ptitle}</span>
+    <span class="mpanel-total">{ptotal}</span>
+  </div>
+  <div class="mpanel-body">
+    <div class="mpanel-chart">{pchart_html}</div>
+    <div class="mpanel-table">{ptable}</div>
+  </div>
+</div>'''
+            sections += f'''
+  <div class="widget-section">
+    <div class="widget-header">
+      <h2>{widget_title}</h2>
+      <span class="badge">Breakdown</span>
+    </div>
+    <div class="widget-body">
+      <div class="mpanel-grid">{cards_html}</div>
+    </div>
+  </div>'''
+            continue
+
+        max_rows     = w.get('max_rows', 20)
+        actual_col   = w.get('actual_col', '')
+        plan_col     = w.get('plan_col', '')
+        invert_color = w.get('invert_actual_color', False)
+
         cfg = _build_chartjs_config(w)
         chart_id = f'chart_{idx}'
         chart_html = ''
@@ -281,7 +350,17 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
             aspect = 'chart-wide' if chart_type in ('bar', 'stacked_bar', 'line', 'combo', 'horizontal_bar') else 'chart-sq'
             chart_html = f'<div class="chart-wrap {aspect}"><canvas id="{chart_id}"></canvas></div>'
 
-        table_html = _build_table_html(data)
+        table_html = _build_table_html(data, max_rows=max_rows, actual_col=actual_col, plan_col=plan_col, invert_color=invert_color)
+
+        subsection = w.get('subsection')
+        subsection_html = ''
+        if subsection:
+            sub_title = subsection.get('title', '')
+            sub_table = _build_table_html(subsection.get('data', []), max_rows=10)
+            subsection_html = f'''<div class="subsection">
+  <div class="subsection-header">{sub_title}</div>
+  {sub_table}
+</div>'''
 
         sections += f'''
   <div class="widget-section">
@@ -292,6 +371,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     <div class="widget-body">
       {chart_html}
       {table_html}
+      {subsection_html}
     </div>
   </div>'''
 
@@ -402,6 +482,32 @@ tr:last-child td {{ border-bottom:none; }}
 tr:nth-child(even) td {{ background:#F8FAFC; }}
 .truncate-note {{ font-size:7pt; color:#94A3B8; margin-top:7px; }}
 
+/* ── Multi-panel 2×2 card grid ───────────────────────── */
+.mpanel-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }}
+.mpanel-card {{ border-radius:10px; overflow:hidden; border:1px solid #E2E8F0; break-inside:avoid; page-break-inside:avoid; }}
+.mpanel-head {{ padding:9px 14px; display:flex; justify-content:space-between; align-items:center; }}
+.mpanel-head.revenue    {{ background:linear-gradient(135deg,#DCFCE7,#F0FDF4); border-bottom:2px solid #16A34A; }}
+.mpanel-head.nps        {{ background:linear-gradient(135deg,#DBEAFE,#EFF6FF); border-bottom:2px solid #2563EB; }}
+.mpanel-head.efficiency {{ background:linear-gradient(135deg,#FEF3C7,#FFFBEB); border-bottom:2px solid #D97706; }}
+.mpanel-head.ai_cost    {{ background:linear-gradient(135deg,#EDE9FE,#F5F3FF); border-bottom:2px solid #7C3AED; }}
+.mpanel-title {{ font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; }}
+.mpanel-title.revenue    {{ color:#15803D; }}
+.mpanel-title.nps        {{ color:#1D4ED8; }}
+.mpanel-title.efficiency {{ color:#B45309; }}
+.mpanel-title.ai_cost    {{ color:#6D28D9; }}
+.mpanel-total {{ font-size:11pt; font-weight:800; color:#0F172A; letter-spacing:-0.3px; }}
+.mpanel-body {{ display:flex; padding:10px 12px; gap:12px; background:#fff; }}
+.mpanel-chart {{ flex:0 0 56%; height:180px; }}
+.mpanel-table {{ flex:1; min-width:0; }}
+.mpanel-table .data-table {{ border:none; }}
+.mpanel-table table {{ font-size:6pt; width:100%; }}
+.mpanel-table th {{ font-size:5.5pt; font-weight:700; padding:2px 5px; color:#64748B; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid #E2E8F0; background:transparent; }}
+.mpanel-table td {{ padding:2px 5px; border-bottom:1px solid #F8FAFC; color:#1E293B; }}
+.mpanel-table tr:last-child td {{ border-bottom:none; }}
+/* ── Subsection (filter focus block) ─────────────────── */
+.subsection {{ margin-top:18px; padding-top:16px; border-top:2px dashed #E2E8F0; }}
+.subsection-header {{ font-size:9pt; font-weight:700; color:#334155; margin-bottom:10px; padding:6px 12px; background:#F8FAFC; border-radius:6px; border-left:3px solid #6366F1; }}
+
 @page {{ size:letter; margin:{_MARGIN_TOP} 0 {_MARGIN_BOTTOM} 0; }}
 {page_first_rule}
 </style>
@@ -451,7 +557,10 @@ async def export_pdf(req: PDFRequest):
     from pypdf import PdfWriter, PdfReader
 
     date_str = date.today().strftime("%B %d, %Y")
-    has_charts = any(_build_chartjs_config(w) for w in req.widgets)
+    has_charts = any(
+        _build_chartjs_config(w) or any(_build_chartjs_config(p) for p in w.get('panels', []))
+        for w in req.widgets
+    )
 
     cover_html   = _build_html(req.title, req.tab_name, [], date_str, include_cover=True)
     content_html = _build_html(req.title, req.tab_name, req.widgets, date_str, include_cover=False)

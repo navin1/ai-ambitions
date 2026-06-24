@@ -873,7 +873,7 @@ export function OverviewTab() {
     if (!tileVals || !drill || exporting) return
     setExporting(true)
     try {
-      await exportOverviewPDF(period, tileVals, drill, 'category', selectedKpi, kpiBreakdown)
+      await exportOverviewPDF(period, tileVals, drill, kpiBreakdown, useCaseToCsg, selectedFunctionalArea, selectedCsg)
     } finally {
       setExporting(false)
     }
