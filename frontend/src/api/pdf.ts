@@ -42,7 +42,7 @@ function mkPanel(
   return {
     title, kpi_id: kpiId,
     chart_type: 'horizontal_bar',
-    data:       rows.slice(0, 10).map(toRow),
+    data:       rows.slice(0, 15).map(toRow),
     table_data: rows.map(toRow),
     x_axis: dimKey, y_axis: [valKey],
     bar_color: barColor, total_str: totalStr,
@@ -192,13 +192,13 @@ export async function exportOverviewPDF(
       ...(filterSubsection ? { subsection: filterSubsection } : {}),
     },
     {
-      title:      `Functional Area Analysis — ${period}${titleTag}`,
+      title:      `Top 15 Functional Area — KPIs — ${period}${titleTag}`,
       chart_type: 'multi_panel',
       data:       [],
       panels:     makePanels('Area', revByFA, npsByFA, effByFA, costByFA),
     },
     {
-      title:      `CSG Analysis — ${period}${titleTag}`,
+      title:      `Top 15 CSG — KPIs — ${period}${titleTag}`,
       chart_type: 'multi_panel',
       data:       [],
       panels:     makePanels('CSG',

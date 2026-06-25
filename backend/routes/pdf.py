@@ -134,7 +134,7 @@ def _build_chartjs_config(widget: dict) -> dict | None:
     base_opts: dict = {
         'responsive': True,
         'maintainAspectRatio': False,
-        'plugins': {'legend': legend_opts},
+        'plugins': {'legend': legend_opts, 'datalabels': False},
         'scales': grid_opts,
     }
 
@@ -162,15 +162,23 @@ def _build_chartjs_config(widget: dict) -> dict | None:
         opts = json.loads(json.dumps(base_opts))
         opts['scales']['x']['stacked'] = stacked
         opts['scales']['y']['stacked'] = stacked
+        label_fmt = None
         if is_horiz:
             opts['indexAxis'] = 'y'
             opts['scales']['x']['grid'] = {'color': 'rgba(0,0,0,0.05)'}
             opts['scales']['y']['grid'] = {'display': False}
             opts['scales']['y']['ticks'] = {'font': {'size': 7}, 'autoSkip': False}
+            opts['layout'] = {'padding': {'right': 38}}
+            val_unit = (y_axis[0] if y_axis else '').strip()
+            label_fmt = 'dollar' if val_unit == '$M' else ('pts' if val_unit == 'pts' else 'pct')
+            opts['plugins']['datalabels'] = {
+                'anchor': 'end', 'align': 'end', 'offset': 4,
+                'font': {'size': 6.5, 'weight': '700'}, 'color': '#374151', 'clip': False,
+            }
             for ds in datasets:
                 ds['maxBarThickness'] = 11
                 ds['borderRadius'] = 2
-        return {'type': 'bar', 'data': {'labels': labels, 'datasets': datasets}, 'options': opts, '_money': is_money}
+        return {'type': 'bar', 'data': {'labels': labels, 'datasets': datasets}, 'options': opts, '_money': is_money, '_label_fmt': label_fmt}
 
     if chart_type == 'line':
         if color_field and any(color_field in r for r in data):
@@ -193,7 +201,8 @@ def _build_chartjs_config(widget: dict) -> dict | None:
                  'fill': False, 'borderWidth': 1, 'tension': 0.2, 'pointRadius': 0}
                 for i, k in enumerate(y_keys)
             ]
-        return {'type': 'line', 'data': {'labels': labels, 'datasets': datasets}, 'options': base_opts, '_money': is_money}
+        line_opts = json.loads(json.dumps(base_opts))
+        return {'type': 'line', 'data': {'labels': labels, 'datasets': datasets}, 'options': line_opts, '_money': is_money, '_label_fmt': None}
 
     if chart_type in ('donut', 'pie'):
         val_key = (y_axis[0] if y_axis else None) or next(
@@ -206,9 +215,12 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             'data': {'labels': labels, 'datasets': [{'data': values, 'backgroundColor': P[:len(values)], 'hoverOffset': 4}]},
             'options': {
                 'responsive': True, 'maintainAspectRatio': False,
-                'plugins': {'legend': {'position': 'right', 'labels': {'font': {'size': 13}, 'boxWidth': 14, 'padding': 16}}},
+                'plugins': {
+                    'legend': {'position': 'right', 'labels': {'font': {'size': 13}, 'boxWidth': 14, 'padding': 16}},
+                    'datalabels': False,
+                },
             },
-            '_money': is_money,
+            '_money': is_money, '_label_fmt': None,
         }
 
     if chart_type == 'combo':
@@ -232,14 +244,14 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             'data': {'labels': labels, 'datasets': datasets},
             'options': {
                 'responsive': True, 'maintainAspectRatio': False,
-                'plugins': {'legend': legend_opts},
+                'plugins': {'legend': legend_opts, 'datalabels': False},
                 'scales': {
                     'x': {'grid': {'display': False}, 'ticks': {'font': {'size': 12}, 'maxRotation': 45, 'minRotation': 0}},
                     'y': {'position': 'left', 'grid': {'color': 'rgba(0,0,0,0.06)'}, 'ticks': {'font': {'size': 12}}},
                     'y1': {'position': 'right', 'grid': {'drawOnChartArea': False}, 'ticks': {'font': {'size': 12}}},
                 },
             },
-            '_money': is_money,
+            '_money': is_money, '_label_fmt': None,
         }
 
     return None
@@ -381,6 +393,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
         charts_js = f'''<script>
 (function() {{
   if (typeof Chart === 'undefined') {{ window.chartsReady = true; return; }}
+  if (typeof ChartDataLabels !== 'undefined') {{ Chart.register(ChartDataLabels); }}
   Chart.defaults.font.family = "Inter, Segoe UI, Arial, sans-serif";
   function numFmt(v, money) {{
     var a = Math.abs(v), p = money ? '$' : '';
@@ -389,11 +402,18 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     if (a >= 1e3) return p + Math.round(v/1e3) + 'K';
     return p + Math.round(v).toLocaleString();
   }}
+  function fmtLabel(v, fmt) {{
+    v = parseFloat(v);
+    if (fmt === 'dollar') return '$' + v.toFixed(1) + 'M';
+    if (fmt === 'pts')    return v.toFixed(2) + ' pts';
+    return v.toFixed(1) + '%';
+  }}
   var items = {configs_json};
   items.forEach(function(item) {{
     var el = document.getElementById(item.id);
     if (!el) return;
     var money = item.config._money === true;
+    var labelFmt = item.config._label_fmt || null;
     var scales = (item.config.options || {{}}).scales || {{}};
     var isHoriz = (item.config.options || {{}}).indexAxis === 'y';
     var valAxis = isHoriz ? scales.x : scales.y;
@@ -403,6 +423,12 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     if (scales.y1) scales.y1.ticks = Object.assign(scales.y1.ticks || {{}}, {{
       callback: function(v) {{ return numFmt(v, false); }}
     }});
+    if (isHoriz && labelFmt) {{
+      var dl = ((item.config.options || {{}}).plugins || {{}}).datalabels;
+      if (dl && typeof dl === 'object') {{
+        dl.formatter = function(v) {{ return fmtLabel(v, labelFmt); }};
+      }}
+    }}
     new Chart(el, item.config);
   }});
   window.chartsReady = true;
@@ -431,6 +457,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:'Inter','Segoe UI',Arial,sans-serif; font-size:10pt; color:#1E293B; background:#fff; }}
@@ -497,7 +524,7 @@ tr:nth-child(even) td {{ background:#F8FAFC; }}
 .mpanel-title.ai_cost    {{ color:#6D28D9; }}
 .mpanel-total {{ font-size:11pt; font-weight:800; color:#0F172A; letter-spacing:-0.3px; }}
 .mpanel-body {{ display:flex; padding:10px 12px; gap:12px; background:#fff; }}
-.mpanel-chart {{ flex:0 0 56%; height:180px; }}
+.mpanel-chart {{ flex:0 0 56%; height:300px; }}
 .mpanel-table {{ flex:1; min-width:0; }}
 .mpanel-table .data-table {{ border:none; }}
 .mpanel-table table {{ font-size:6pt; width:100%; }}
