@@ -438,12 +438,16 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
 </script>'''
 
     page_first_rule = '@page :first { margin:0; }' if include_cover else ''
+    logo     = _logo_b64()
+    logo_img = (f'<img src="data:image/png;base64,{logo}" style="height:64px;display:block;" />'
+                if logo else '<span style="font-size:14pt;font-weight:700;color:#0F172A;">Company</span>')
+    period_label = tab_name.split('—')[-1].strip()
     cover_block = f'''
 <div class="cover">
   <div class="cover-rule-top"></div>
-  <p class="cover-eyebrow">Executive Report</p>
+  <div style="margin-bottom:12px;">{logo_img}</div>
   <h1>{title}</h1>
-  <p class="sub">{tab_name}</p>
+  <p class="cover-eyebrow">Executive Report — {period_label}</p>
   <div class="cover-divider"></div>
   <div class="cover-meta">
     <div class="cover-meta-item"><label>Report Date</label><span>{date_str}</span></div>
@@ -467,8 +471,8 @@ body {{ font-family:'Inter','Segoe UI',Arial,sans-serif; font-size:10pt; color:#
 /* ── Cover ─────────────────────────────────── */
 .cover {{
   page-break-after:always;
-  min-height:100vh; display:flex; flex-direction:column; justify-content:center;
-  padding:80px 72px; background:#fff; position:relative;
+  min-height:100vh; display:flex; flex-direction:column; justify-content:flex-start;
+  padding:220px 72px 80px 72px; background:#fff; position:relative;
   border-left:6px solid #991B1B;
 }}
 .cover-rule-top {{ position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#991B1B,#EF4444,#FCA5A5); }}

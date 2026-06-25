@@ -253,7 +253,7 @@ export async function exportOverviewPDF(
 
   const resp = await client.post(
     '/pdf/export',
-    { tab_name: `Overview — ${period}`, title: 'AI Ambitions Dashboard', widgets },
+    { tab_name: `Overview — ${period}`, title: 'AI Ambitions', widgets },
     { responseType: 'blob' }
   )
 
