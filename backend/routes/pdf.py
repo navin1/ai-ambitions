@@ -400,6 +400,8 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     if (a >= 1e9) return p + (v/1e9).toFixed(1) + 'B';
     if (a >= 1e6) return p + (v/1e6).toFixed(1) + 'M';
     if (a >= 1e3) return p + Math.round(v/1e3) + 'K';
+    if (a > 0 && a < 1)  return p + parseFloat(v.toFixed(2));
+    if (a < 10)          return p + parseFloat(v.toFixed(1));
     return p + Math.round(v).toLocaleString();
   }}
   function fmtLabel(v, fmt) {{
