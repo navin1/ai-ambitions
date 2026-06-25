@@ -176,7 +176,7 @@ def _build_chartjs_config(widget: dict) -> dict | None:
                 'font': {'size': 6.5, 'weight': '700'}, 'color': '#374151', 'clip': False,
             }
             for ds in datasets:
-                ds['maxBarThickness'] = 11
+                ds['maxBarThickness'] = 18
                 ds['borderRadius'] = 2
         return {'type': 'bar', 'data': {'labels': labels, 'datasets': datasets}, 'options': opts, '_money': is_money, '_label_fmt': label_fmt}
 
