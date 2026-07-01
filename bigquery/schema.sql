@@ -51,6 +51,10 @@ CREATE TABLE `ai_ambitions.ai_amb_kpi_summary` (
   plan_value    FLOAT64           OPTIONS(description='Planned / budget target in same units'),
   actual_delta  FLOAT64           OPTIONS(description='Change vs comparison; positive = improvement'),
   delta_label   STRING            OPTIONS(description='Human label for the delta, e.g. "vs Q3" or "vs plan"'),
+  range_min     FLOAT64           OPTIONS(description='Range bar minimum value (display scale)'),
+  range_max     FLOAT64           OPTIONS(description='Range bar maximum value (display scale)'),
+  target_min    FLOAT64           OPTIONS(description='Target band lower bound (non-spend KPIs); NULL for ai-cost'),
+  target_max    FLOAT64           OPTIONS(description='Target band upper bound for non-spend; budget cap for ai-cost'),
   update_ts     TIMESTAMP         OPTIONS(description='Last refresh timestamp')
 );
 
@@ -71,10 +75,13 @@ CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
   revenue_plan           FLOAT64            OPTIONS(description='Planned revenue contribution (%)'),
   revenue_actual_dollars FLOAT64            OPTIONS(description='Revenue growth contribution ($M); NULL = not contributing'),
   revenue_plan_dollars   FLOAT64            OPTIONS(description='Planned revenue contribution ($M)'),
+  revenue_notes          STRING             OPTIONS(description='Free-text note for this use case''s revenue contribution'),
   nps_actual         FLOAT64            OPTIONS(description='NPS improvement contribution (pts); NULL = not contributing'),
   nps_plan           FLOAT64            OPTIONS(description='Planned NPS contribution (pts)'),
+  nps_notes          STRING             OPTIONS(description='Free-text note for this use case''s NPS contribution'),
   efficiency_actual  FLOAT64            OPTIONS(description='Efficiency gain contribution (%); NULL = not contributing'),
   efficiency_plan    FLOAT64            OPTIONS(description='Planned efficiency contribution (%)'),
+  efficiency_notes   STRING             OPTIONS(description='Free-text note for this use case''s efficiency contribution'),
   current_phase      STRING             OPTIONS(description='Delivery phase: Planning | Pilot | Scaling | Production'),
   update_ts          TIMESTAMP          OPTIONS(description='Last refresh timestamp')
 );
@@ -107,7 +114,10 @@ SELECT
   description,
   csg,
   functional_area,
-  current_phase
+  current_phase,
+  revenue_notes,
+  nps_notes,
+  efficiency_notes
 FROM `ai_ambitions.ai_amb_use_case_data`;
 
 
@@ -127,7 +137,10 @@ SELECT
   current_phase,
   functional_area,
   revenue_actual_dollars,
-  revenue_plan_dollars
+  revenue_plan_dollars,
+  revenue_notes,
+  nps_notes,
+  efficiency_notes
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE revenue_actual IS NOT NULL
 
@@ -144,7 +157,10 @@ SELECT
   current_phase,
   functional_area,
   CAST(NULL AS FLOAT64) AS revenue_actual_dollars,
-  CAST(NULL AS FLOAT64) AS revenue_plan_dollars
+  CAST(NULL AS FLOAT64) AS revenue_plan_dollars,
+  revenue_notes,
+  nps_notes,
+  efficiency_notes
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE nps_actual IS NOT NULL
 
@@ -161,6 +177,9 @@ SELECT
   current_phase,
   functional_area,
   CAST(NULL AS FLOAT64) AS revenue_actual_dollars,
-  CAST(NULL AS FLOAT64) AS revenue_plan_dollars
+  CAST(NULL AS FLOAT64) AS revenue_plan_dollars,
+  revenue_notes,
+  nps_notes,
+  efficiency_notes
 FROM `ai_ambitions.ai_amb_use_case_data`
 WHERE efficiency_actual IS NOT NULL;

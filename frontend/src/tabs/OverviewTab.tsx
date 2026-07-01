@@ -14,19 +14,17 @@ interface FaContrib { pct: number; rawValue: string; dollarStr?: string }
 
 interface TileMeta {
   id: string; label: string
-  rangeMin: number; rangeMax: number
-  targetMin: number; targetMax: number
-  rangeUnit: string; targetLabel: string
+  rangeUnit: string
   isSpendTile?: boolean
 }
 
 // ── Static tile metadata ──────────────────────────────────────────────────────
 
 const TILE_META: TileMeta[] = [
-  { id: 'ai-cost',    label: 'AI Cost',         rangeMin: 0, rangeMax: 100, targetMin: 0,  targetMax: 45, rangeUnit: 'M', targetLabel: '',                isSpendTile: true },
-  { id: 'revenue',    label: 'Revenue Growth',  rangeMin: 0, rangeMax: 10,  targetMin: 3,  targetMax: 7,  rangeUnit: '%', targetLabel: 'target band 3–7%'  },
-  { id: 'nps',        label: 'NPS Improvement', rangeMin: 0, rangeMax: 6,   targetMin: 2,  targetMax: 4,  rangeUnit: '',  targetLabel: 'target band 2–4'   },
-  { id: 'efficiency', label: 'Efficiency Gain', rangeMin: 0, rangeMax: 50,  targetMin: 30, targetMax: 40, rangeUnit: '%', targetLabel: 'target band 30–40%' },
+  { id: 'ai-cost',    label: 'AI Cost',         rangeUnit: 'M', isSpendTile: true },
+  { id: 'revenue',    label: 'Revenue Growth',  rangeUnit: '%' },
+  { id: 'nps',        label: 'NPS Improvement', rangeUnit: '' },
+  { id: 'efficiency', label: 'Efficiency Gain', rangeUnit: '%' },
 ]
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -66,11 +64,12 @@ function phaseStyle(p: string | null | undefined)  { return PHASE_STYLE[p ?? '']
 // ── Range bar ─────────────────────────────────────────────────────────────────
 
 function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan: boolean }) {
-  const { rangeMin, rangeMax, targetMin, targetMax, rangeUnit, targetLabel, isSpendTile } = meta
-  const { current, planValue, planCurrent } = val
+  const { rangeUnit, isSpendTile } = meta
+  const { current, planValue, planCurrent,
+          rangeMin = 0, rangeMax = 100, targetMin, targetMax } = val
 
   if (isSpendTile) {
-    const budget = planValue ?? 45
+    const budget = planValue ?? targetMax ?? 45
     const fillW  = asPct(current, rangeMin, rangeMax)
     const planL  = asPct(budget, rangeMin, rangeMax)
     return (
@@ -90,10 +89,13 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
     )
   }
 
-  const targetL  = asPct(targetMin, rangeMin, rangeMax)
-  const targetW  = `${((targetMax - targetMin) / (rangeMax - rangeMin)) * 100}%`
-  const currentL = asPct(current, rangeMin, rangeMax)
-  const planL    = planCurrent !== undefined ? asPct(planCurrent, rangeMin, rangeMax) : null
+  const tMin       = targetMin ?? 0
+  const tMax       = targetMax ?? rangeMax
+  const targetLabel = `target band ${tMin}–${tMax}${rangeUnit}`
+  const targetL    = asPct(tMin, rangeMin, rangeMax)
+  const targetW    = `${((tMax - tMin) / (rangeMax - rangeMin)) * 100}%`
+  const currentL   = asPct(current, rangeMin, rangeMax)
+  const planL      = planCurrent !== undefined ? asPct(planCurrent, rangeMin, rangeMax) : null
 
   return (
     <div className="mt-5">
@@ -327,6 +329,26 @@ function DescriptionPopover({ text }: { text: string }) {
   )
 }
 
+// ── Note popover (shown on KPI capsule click) ─────────────────────────────────
+
+const NOTE_POPOVER_STYLE: Record<string, { bg: string; border: string; text: string }> = {
+  REVENUE:    { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-800'    },
+  NPS:        { bg: 'bg-purple-50',  border: 'border-purple-200',  text: 'text-purple-800'  },
+  EFFICIENCY: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800' },
+}
+
+function NotePopover({ text, tag }: { text: string; tag: string }) {
+  const s = NOTE_POPOVER_STYLE[tag] ?? { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700' }
+  return (
+    <div
+      className={clsx('absolute left-0 top-full mt-1 z-50 w-64 rounded-xl shadow-xl p-3 border', s.bg, s.border)}
+      onClickCapture={e => e.stopPropagation()}
+    >
+      <p className={clsx('text-xs leading-relaxed', s.text)}>{text}</p>
+    </div>
+  )
+}
+
 // ── Use case widget ───────────────────────────────────────────────────────────
 
 function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTotal = 0, filterArea, filterCsg, useCaseToCsg = {} }: {
@@ -335,6 +357,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
   filterArea?: string | null; filterCsg?: string | null; useCaseToCsg?: Record<string, string | null>
 }) {
   const [openPopover, setOpenPopover] = useState<string | null>(null)
+  const [openNote, setOpenNote]       = useState<string | null>(null)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>(() => ({
     key: kpiDrill ? 'value' : 'amount',
     dir: 'desc',
@@ -345,11 +368,18 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
   }
 
   useEffect(() => {
-    if (!openPopover) return
-    function close() { setOpenPopover(null) }
+    if (!openPopover && !openNote) return
+    function close() { setOpenPopover(null); setOpenNote(null) }
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
-  }, [openPopover])
+  }, [openPopover, openNote])
+
+  function noteForTag(item: { revenueNotes?: string | null; npsNotes?: string | null; efficiencyNotes?: string | null }, tag: string): string | null {
+    if (tag === 'REVENUE')    return item.revenueNotes    ?? null
+    if (tag === 'NPS')        return item.npsNotes        ?? null
+    if (tag === 'EFFICIENCY') return item.efficiencyNotes ?? null
+    return null
+  }
 
   const descByName = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.description]))
   const kpiByName  = Object.fromEntries(drill.byUseCase.map(u => [u.name, u.kpi]))
@@ -451,12 +481,20 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                       >{uc.label}</span>
                       {openPopover === uc.label && desc && <DescriptionPopover text={desc} />}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {(kpiByName[uc.label] ?? '').split(',').filter(Boolean).map(tag => (
-                        <span key={tag} className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag))}>
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="relative flex items-center gap-1 flex-shrink-0">
+                      {(kpiByName[uc.label] ?? '').split(',').filter(Boolean).map(tag => {
+                        const note    = noteForTag(uc, tag)
+                        const noteKey = `${uc.label}::${tag}`
+                        return (
+                          <div key={tag} className="relative">
+                            <span
+                              onClick={e => { e.stopPropagation(); if (note) setOpenNote(openNote === noteKey ? null : noteKey) }}
+                              className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag), note ? 'cursor-pointer' : 'cursor-default')}
+                            >{tag}</span>
+                            {openNote === noteKey && note && <NotePopover text={note} tag={tag} />}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                   <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
@@ -464,7 +502,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                     {uc.currentPhase ?? '—'}
                   </span>
                   <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
-                    <span className="block text-xs text-gray-500 truncate leading-tight">{uc.functionalArea ?? '—'}</span>
+                    <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                   </div>
                   <span className={clsx('text-sm font-black tabular-nums shrink-0',
                     vsPlan && uc.plan != null
@@ -573,12 +611,20 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                     >{uc.name}</span>
                     {openPopover === uc.name && uc.description && <DescriptionPopover text={uc.description} />}
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {(uc.kpi ? uc.kpi.split(',').filter(Boolean) : []).map(tag => (
-                      <span key={tag} className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag))}>
-                        {tag}
-                      </span>
-                    ))}
+                  <div className="relative flex items-center gap-1 flex-shrink-0">
+                    {(uc.kpi ? uc.kpi.split(',').filter(Boolean) : []).map(tag => {
+                      const note    = noteForTag(uc, tag)
+                      const noteKey = `${uc.name}::${tag}`
+                      return (
+                        <div key={tag} className="relative">
+                          <span
+                            onClick={e => { e.stopPropagation(); if (note) setOpenNote(openNote === noteKey ? null : noteKey) }}
+                            className={clsx('text-xs font-bold px-2 py-0.5 rounded-full', kpiTag(tag), note ? 'cursor-pointer' : 'cursor-default')}
+                          >{tag}</span>
+                          {openNote === noteKey && note && <NotePopover text={note} tag={tag} />}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
                 <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
@@ -586,7 +632,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                   {uc.currentPhase ?? '—'}
                 </span>
                 <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
-                  <span className="block text-xs text-gray-500 truncate leading-tight">{uc.functionalArea ?? '—'}</span>
+                  <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                 </div>
                 <span className={clsx('text-sm font-black tabular-nums shrink-0',
                   vsPlan && uc.plan != null

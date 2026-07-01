@@ -18,12 +18,13 @@
 -- ── 1. KPI Summary ────────────────────────────────────────────────────────────
 
 INSERT INTO `ai_ambitions.ai_amb_kpi_summary`
-  (period, kpi_id, actual_value, plan_value, actual_delta, delta_label, update_ts)
+  (period, kpi_id, actual_value, plan_value, actual_delta, delta_label,
+   range_min, range_max, target_min, target_max, update_ts)
 VALUES
-  ('YTD', 'ai-cost',    38.5, 42.0, -3.5, 'vs plan', CURRENT_TIMESTAMP()),
-  ('YTD', 'revenue',     2.1,  4.5,  0.3, 'vs Q4',   CURRENT_TIMESTAMP()),
-  ('YTD', 'nps',         3.4,  3.0,  0.5, 'vs Q4',   CURRENT_TIMESTAMP()),
-  ('YTD', 'efficiency', 36.0, 32.0,  4.0, 'vs Q4',   CURRENT_TIMESTAMP());
+  ('YTD', 'ai-cost',     38.5, 42.0, -3.5, 'vs plan',  0,  60,   NULL, 45,   CURRENT_TIMESTAMP()),
+  ('YTD', 'revenue',      2.1,  4.5,  0.3, 'vs Q4',    0,  10,   3,    7,    CURRENT_TIMESTAMP()),
+  ('YTD', 'nps',          3.4,  3.0,  0.5, 'vs Q4',    0,   6,   2,    4,    CURRENT_TIMESTAMP()),
+  ('YTD', 'efficiency',  36.0, 32.0,  4.0, 'vs Q4',    0,  50,  30,   40,   CURRENT_TIMESTAMP());
 
 
 -- ── 2. Use Case Data — YTD ───────────────────────────────────────────────────
@@ -553,3 +554,40 @@ VALUES
    'Biometric and document-AI pipeline accelerating KYC onboarding while reducing fraud.',
    'Business', 'CX', 'Production',
    0.33, 0.36, NULL, NULL, NULL, NULL, 0.07, 0.06, 0.50, 0.44, CURRENT_TIMESTAMP());
+
+
+-- ── 3. Sample notes — for testing the KPI capsule note popover ───────────────
+-- One representative use case per KPI group so all three note types are tested.
+
+-- Revenue-only use case: one clickable capsule (REVENUE)
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET revenue_notes = 'YTD search conversion lifted 2.8pp after semantic ranking rollout. Q3 A/B test (n=2.1M sessions) confirmed; now in full production across all markets.'
+WHERE period = 'YTD' AND use_case = 'Personalized Search & Discovery';
+
+-- NPS-only use case: one clickable capsule (NPS)
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET nps_notes = 'Return resolution time dropped from 4.2 to 1.8 days post-launch. Friction reduction confirmed in exit surveys; correlates with +0.38 NPS pts improvement.'
+WHERE period = 'YTD' AND use_case = 'Conversational Returns Assistant';
+
+-- Efficiency-only use case: one clickable capsule (EFFICIENCY)
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET efficiency_notes = 'Forecast MAPE improved from 22% to 9% on a 4-week horizon. Inventory holding cost down $1.2M annualized versus prior model baseline.'
+WHERE period = 'YTD' AND use_case = 'Demand Forecast v3';
+
+-- Revenue + NPS use case: two clickable capsules
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET revenue_notes = 'Image-to-product match rate at 87%. Holdout analysis confirms 1.9× higher conversion for visual-search sessions vs standard search.',
+    nps_notes     = 'Reduced "can\'t find it" CX contacts by 22%. Customers rate discovery experience 4.3/5 vs 3.7/5 prior to rollout.'
+WHERE period = 'YTD' AND use_case = 'Visual Search for Products';
+
+-- Revenue + Efficiency use case: two clickable capsules
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET revenue_notes    = 'Early disruption detection enabled proactive rerouting; stockout rate fell 18pp in pilot DCs, recovering an estimated $1.2M revenue.',
+    efficiency_notes = 'Alert-to-resolution time cut from 6.1 to 2.4 hours. Analyst workload reduced by ~30% through automated root-cause triaging.'
+WHERE period = 'YTD' AND use_case = 'Supply Chain Anomaly Detection';
+
+-- NPS + Efficiency use case: two clickable capsules
+UPDATE `ai_ambitions.ai_amb_use_case_data`
+SET nps_notes        = 'First-contact resolution rate rose from 71% to 84% in agent-handled contacts, directly correlating with +0.18 NPS pts uplift.',
+    efficiency_notes = 'Average handle time down 38s per contact (~15%). At current volume this frees ~4,200 agent-hours per month.'
+WHERE period = 'YTD' AND use_case = 'Customer Service Agent Assist';
