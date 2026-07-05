@@ -59,9 +59,12 @@ export async function exportOverviewPDF(
   useCaseToCsg: Record<string, string | null>,
   filterArea?: string | null,
   filterCsg?: string | null,
+  fiscalYear?: number,
 ): Promise<void> {
   // KPI order from backend: [0]=ai-cost, [1]=revenue, [2]=nps, [3]=efficiency
   const KPI_LABELS = ['AI Cost', 'Revenue Growth', 'NPS Improvement', 'Efficiency Gain']
+  const fyLabel = fiscalYear !== undefined ? `FY${String(fiscalYear).slice(-2)} ` : ''
+  const periodLabel = `${fyLabel}${period}`
 
   const matchesFilter = (label: string, fa?: string | null): boolean => {
     if (filterArea && fa !== filterArea) return false
@@ -184,7 +187,7 @@ export async function exportOverviewPDF(
   // ── Assemble widgets ──────────────────────────────────────────────────────────
   const widgets = [
     {
-      title:       `AI Ambitions KPIs — ${period}${titleTag}`,
+      title:       `AI Ambitions KPIs — ${periodLabel}${titleTag}`,
       chart_type:  'table',
       data:        kpiTableData,
       x_axis:      'KPI',
@@ -192,13 +195,13 @@ export async function exportOverviewPDF(
       ...(filterSubsection ? { subsection: filterSubsection } : {}),
     },
     {
-      title:      `Top 10 Functional Area — KPIs — ${period}${titleTag}`,
+      title:      `Top 10 Functional Area — KPIs — ${periodLabel}${titleTag}`,
       chart_type: 'multi_panel',
       data:       [],
       panels:     makePanels('Area', revByFA, npsByFA, effByFA, costByFA),
     },
     {
-      title:      `Top 10 CSG — KPIs — ${period}${titleTag}`,
+      title:      `Top 10 CSG — KPIs — ${periodLabel}${titleTag}`,
       chart_type: 'multi_panel',
       data:       [],
       panels:     makePanels('CSG',
@@ -209,7 +212,7 @@ export async function exportOverviewPDF(
       ),
     },
     {
-      title:       `Top ${TOP_UC} Use Cases — Revenue Growth — ${period}${titleTag}`,
+      title:       `Top ${TOP_UC} Use Cases — Revenue Growth — ${periodLabel}${titleTag}`,
       chart_type:  'table',
       data:        top25Revenue,
       x_axis:      '#',
@@ -219,7 +222,7 @@ export async function exportOverviewPDF(
       plan_col:    'Plan $M',
     },
     {
-      title:       `Top ${TOP_UC} Use Cases — NPS Improvement — ${period}${titleTag}`,
+      title:       `Top ${TOP_UC} Use Cases — NPS Improvement — ${periodLabel}${titleTag}`,
       chart_type:  'table',
       data:        top25NPS,
       x_axis:      '#',
@@ -229,7 +232,7 @@ export async function exportOverviewPDF(
       plan_col:    'Plan (pts)',
     },
     {
-      title:       `Top ${TOP_UC} Use Cases — Efficiency Gain — ${period}${titleTag}`,
+      title:       `Top ${TOP_UC} Use Cases — Efficiency Gain — ${periodLabel}${titleTag}`,
       chart_type:  'table',
       data:        top25Eff,
       x_axis:      '#',
@@ -239,7 +242,7 @@ export async function exportOverviewPDF(
       plan_col:    'Plan (%)',
     },
     {
-      title:               `Top ${TOP_UC} Use Cases — AI Cost — ${period}${titleTag}`,
+      title:               `Top ${TOP_UC} Use Cases — AI Cost — ${periodLabel}${titleTag}`,
       chart_type:          'table',
       data:                top25Cost,
       x_axis:              '#',
@@ -253,14 +256,14 @@ export async function exportOverviewPDF(
 
   const resp = await client.post(
     '/pdf/export',
-    { tab_name: `Overview — ${period}`, title: 'AI Ambitions', widgets },
+    { tab_name: `Overview — ${periodLabel}`, title: 'AI Ambitions', widgets },
     { responseType: 'blob' }
   )
 
   const url = URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }))
   const a   = document.createElement('a')
   a.href     = url
-  a.download = `AI_Ambitions_${period}_report.pdf`
+  a.download = `AI_Ambitions_${periodLabel.replace(/\s+/g, '_')}_report.pdf`
   a.click()
   URL.revokeObjectURL(url)
 }

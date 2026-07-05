@@ -7,8 +7,8 @@
 --   2. seed_data.sql — INSERT statements
 --
 -- Table inventory (2 tables):
---   ai_amb_kpi_summary    — headline KPI tiles (period × kpi_id)
---   ai_amb_use_case_data  — flat fact: all use-case metrics per period
+--   ai_amb_kpi_summary    — headline KPI tiles (fiscal_year × period × kpi_id)
+--   ai_amb_use_case_data  — flat fact: all use-case metrics per fiscal_year × period
 --
 -- View inventory (2 views):
 --   ai_amb_investment_breakdown_v  — use-case spend rows
@@ -26,25 +26,12 @@ DROP VIEW IF EXISTS `ai_ambitions.v_kpi_breakdown`;
 DROP VIEW IF EXISTS `ai_ambitions.v_investment_breakdown`;
 
 
--- ── 2. Drop tables ────────────────────────────────────────────────────────────
-
-DROP TABLE IF EXISTS `ai_ambitions.ai_amb_use_case_data`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_amb_use_case_metric`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_amb_use_cases`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_amb_dimension_metrics`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_amb_kpi_summary`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_use_case_metrics`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_use_cases`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_kpi_breakdown`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_investment`;
-DROP TABLE IF EXISTS `ai_ambitions.ai_ambition_kpi_summary`;
-
-
 -- ── 3. Create tables ──────────────────────────────────────────────────────────
 
 -- Table: ai_amb_kpi_summary
--- One row per (period, kpi_id). Source for the four KPI headline tiles.
+-- One row per (fiscal_year, period, kpi_id). Source for the four KPI headline tiles.
 CREATE TABLE `ai_ambitions.ai_amb_kpi_summary` (
+  fiscal_year   INT64    NOT NULL OPTIONS(description='Fiscal year, e.g. 2026 for FY26'),
   period        STRING   NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
   kpi_id        STRING   NOT NULL OPTIONS(description='revenue | nps | efficiency | ai-cost'),
   actual_value  FLOAT64  NOT NULL OPTIONS(description='Metric value in display units (%, pts, or $M)'),
@@ -59,11 +46,12 @@ CREATE TABLE `ai_ambitions.ai_amb_kpi_summary` (
 );
 
 -- Table: ai_amb_use_case_data
--- Flat fact table: one row per (period, use_case).
+-- Flat fact table: one row per (fiscal_year, period, use_case).
 -- KPI columns (revenue_actual, nps_actual, efficiency_actual) are NULL
 -- when the use case does not contribute to that KPI. The views filter on
 -- IS NOT NULL to show only contributing use cases in each KPI drill-down.
 CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
+  fiscal_year        INT64     NOT NULL OPTIONS(description='Fiscal year, e.g. 2026 for FY26'),
   period             STRING    NOT NULL OPTIONS(description='YTD | Q1 | Q2 | Q3 | Q4'),
   use_case           STRING    NOT NULL OPTIONS(description='Use case display name'),
   description        STRING             OPTIONS(description='One-sentence description for hover tooltip'),
@@ -75,13 +63,13 @@ CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
   revenue_plan           FLOAT64            OPTIONS(description='Planned revenue contribution (%)'),
   revenue_actual_dollars FLOAT64            OPTIONS(description='Revenue growth contribution ($M); NULL = not contributing'),
   revenue_plan_dollars   FLOAT64            OPTIONS(description='Planned revenue contribution ($M)'),
-  revenue_notes          STRING             OPTIONS(description='Free-text note for this use case''s revenue contribution'),
+  revenue_notes          STRING             OPTIONS(description="Free-text note for this use case's revenue contribution"),
   nps_actual         FLOAT64            OPTIONS(description='NPS improvement contribution (pts); NULL = not contributing'),
   nps_plan           FLOAT64            OPTIONS(description='Planned NPS contribution (pts)'),
-  nps_notes          STRING             OPTIONS(description='Free-text note for this use case''s NPS contribution'),
+  nps_notes          STRING             OPTIONS(description="Free-text note for this use case's NPS contribution"),
   efficiency_actual  FLOAT64            OPTIONS(description='Efficiency gain contribution (%); NULL = not contributing'),
   efficiency_plan    FLOAT64            OPTIONS(description='Planned efficiency contribution (%)'),
-  efficiency_notes   STRING             OPTIONS(description='Free-text note for this use case''s efficiency contribution'),
+  efficiency_notes   STRING             OPTIONS(description="Free-text note for this use case's efficiency contribution"),
   current_phase      STRING             OPTIONS(description='Delivery phase: Planning | Pilot | Scaling | Production'),
   update_ts          TIMESTAMP          OPTIONS(description='Last refresh timestamp')
 );
@@ -95,6 +83,7 @@ CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
 CREATE OR REPLACE VIEW `ai_ambitions.ai_amb_investment_breakdown_v` AS
 
 SELECT
+  fiscal_year,
   period,
   'use_case'           AS dimension_type,
   use_case             AS dimension_name,
@@ -127,6 +116,7 @@ FROM `ai_ambitions.ai_amb_use_case_data`;
 CREATE OR REPLACE VIEW `ai_ambitions.ai_amb_kpi_breakdown_v` AS
 
 SELECT
+  fiscal_year,
   period,
   'revenue'            AS kpi_id,
   'use_case'           AS dimension_type,
@@ -147,6 +137,7 @@ WHERE revenue_actual IS NOT NULL
 UNION ALL
 
 SELECT
+  fiscal_year,
   period,
   'nps'                AS kpi_id,
   'use_case'           AS dimension_type,
@@ -167,6 +158,7 @@ WHERE nps_actual IS NOT NULL
 UNION ALL
 
 SELECT
+  fiscal_year,
   period,
   'efficiency'         AS kpi_id,
   'use_case'           AS dimension_type,

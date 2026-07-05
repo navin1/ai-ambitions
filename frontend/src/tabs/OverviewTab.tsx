@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Download, X, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { fetchOverviewSummary, type TileVal, type DrillData, type KpiDrillData } from '../api/overview'
+import { fetchOverviewSummary, fetchAvailableYears, type TileVal, type DrillData, type KpiDrillData } from '../api/overview'
 import { exportOverviewPDF } from '../api/pdf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -224,6 +224,64 @@ function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' 
   return <span className="text-xs text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
 }
 
+// ── Fiscal year picker ────────────────────────────────────────────────────────
+// Renders as a static (non-interactive) pill when only one fiscal year exists,
+// and as a real dropdown once BigQuery has more than one to switch between.
+
+function YearPicker({ years, value, onChange }: { years: number[]; value: number | undefined; onChange: (y: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const enabled = years.length > 1
+
+  useEffect(() => {
+    if (!open) return
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const label = value !== undefined ? `FY${String(value).slice(-2)}` : '—'
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        disabled={!enabled}
+        onClick={() => enabled && setOpen(o => !o)}
+        title={enabled ? 'Switch fiscal year' : 'Only one fiscal year of data is available'}
+        className={clsx(
+          'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl shadow-sm transition-all whitespace-nowrap',
+          enabled
+            ? 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300 cursor-pointer'
+            : 'bg-gray-50 text-gray-400 border-gray-200 cursor-default',
+        )}
+      >
+        {label}
+        {enabled && <ChevronDown size={12} className={clsx('transition-transform duration-200', open && 'rotate-180')} />}
+      </button>
+
+      {open && enabled && (
+        <div className="absolute left-0 top-full mt-1.5 z-50 w-24 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+          {years.map(y => (
+            <button
+              key={y}
+              onClick={() => { onChange(y); setOpen(false) }}
+              className={clsx(
+                'w-full text-left px-3 py-2 text-xs font-semibold transition-colors',
+                y === value ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50',
+              )}
+            >
+              FY{String(y).slice(-2)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Filter picker (reused for Area and CSG dropdowns) ────────────────────────
 
 function FilterPicker({ label, items, value, onChange }: {
@@ -443,11 +501,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
             <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
             <SortIcon sortState={sort} colKey="label" />
           </div>
-          <div className="flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
+          <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
             <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
             <SortIcon sortState={sort} colKey="currentPhase" />
           </div>
-          <div className="flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
+          <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
             <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
             <SortIcon sortState={sort} colKey="functionalArea" />
           </div>
@@ -497,11 +555,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                       })}
                     </div>
                   </div>
-                  <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
+                  <span className={clsx('hidden md:block text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
                     title={uc.currentPhase ?? ''}>
                     {uc.currentPhase ?? '—'}
                   </span>
-                  <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
+                  <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
                     <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                   </div>
                   <span className={clsx('text-sm font-black tabular-nums shrink-0',
@@ -574,11 +632,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
           <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
           <SortIcon sortState={sort} colKey="name" />
         </div>
-        <div className="flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
+        <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
           <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
           <SortIcon sortState={sort} colKey="currentPhase" />
         </div>
-        <div className="flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
+        <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
           <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
           <SortIcon sortState={sort} colKey="functionalArea" />
         </div>
@@ -627,11 +685,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                     })}
                   </div>
                 </div>
-                <span className={clsx('text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
+                <span className={clsx('hidden md:block text-xs font-semibold px-2 py-1 rounded-md w-40 flex-shrink-0 text-center break-words leading-tight', phaseStyle(uc.currentPhase))}
                   title={uc.currentPhase ?? ''}>
                   {uc.currentPhase ?? '—'}
                 </span>
-                <div className="w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
+                <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
                   <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                 </div>
                 <span className={clsx('text-sm font-black tabular-nums shrink-0',
@@ -811,6 +869,7 @@ function SummaryWidget({
 
 export function OverviewTab() {
   const [period,              setPeriod]              = useState<Period>('YTD')
+  const [selectedYear,        setSelectedYear]        = useState<number | undefined>(undefined)
   const [vsPlan,              setVsPlan]              = useState(false)
   const [exporting,           setExporting]           = useState(false)
   const [selectedKpi,            setSelectedKpi]            = useState<string>('revenue')
@@ -818,12 +877,23 @@ export function OverviewTab() {
   const [selectedCsg,            setSelectedCsg]            = useState<string | null>(null)
   const [rightWidgetDimension,   setRightWidgetDimension]   = useState<'area' | 'csg'>('area')
 
+  const { data: yearsResp } = useQuery({
+    queryKey: ['overview-years'],
+    queryFn: fetchAvailableYears,
+    staleTime: 5 * 60 * 1000,
+  })
+  const years = yearsResp?.years ?? []
+
   const { data, isLoading, isError, isFetching } = useQuery({
-    queryKey: ['overview', period],
-    queryFn:  () => fetchOverviewSummary(period),
+    queryKey: ['overview', period, selectedYear],
+    queryFn:  () => fetchOverviewSummary(period, selectedYear),
     staleTime: 0,
     placeholderData: (prev) => prev,
   })
+
+  // Falls back to the backend-resolved year (latest) until the user explicitly
+  // picks one from the dropdown — avoids an extra fetch on initial load.
+  const displayYear = selectedYear ?? data?.fiscalYear
 
   const tileVals     = data?.kpis
   const drill        = data?.investment
@@ -935,7 +1005,7 @@ export function OverviewTab() {
     if (!tileVals || !drill || exporting) return
     setExporting(true)
     try {
-      await exportOverviewPDF(period, tileVals, drill, kpiBreakdown, useCaseToCsg, selectedFunctionalArea, selectedCsg)
+      await exportOverviewPDF(period, tileVals, drill, kpiBreakdown, useCaseToCsg, selectedFunctionalArea, selectedCsg, displayYear)
     } finally {
       setExporting(false)
     }
@@ -1011,7 +1081,7 @@ export function OverviewTab() {
     <div className="flex flex-col gap-5 p-6 bg-gray-50/60 min-h-full">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center flex-wrap justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Overview</h1>
@@ -1021,18 +1091,21 @@ export function OverviewTab() {
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5 font-medium tracking-wide">FY26 · AI investment performance tracker</p>
+          <p className="text-xs text-gray-400 mt-0.5 font-medium tracking-wide">
+            {displayYear !== undefined ? `FY${String(displayYear).slice(-2)}` : 'FY26'} · AI investment performance tracker
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full -mx-1 px-1 sm:mx-0 sm:px-0">
+          <YearPicker years={years} value={displayYear} onChange={setSelectedYear} />
+          <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm shrink-0">
             {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
               const isDisabled = p !== 'YTD'
               return (
                 <button
                   key={p} onClick={() => setPeriod(p)} disabled={isDisabled}
                   className={clsx(
-                    'px-4 py-2 text-xs font-bold tracking-wide transition-all',
+                    'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide transition-all whitespace-nowrap',
                     isDisabled ? 'text-gray-300 cursor-not-allowed'
                       : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
                   )}
@@ -1043,13 +1116,13 @@ export function OverviewTab() {
           <button
             onClick={() => setVsPlan(v => !v)}
             className={clsx(
-              'px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm',
+              'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap',
               vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300',
             )}
           >VS PLAN</button>
           <button
             onClick={handleExport} disabled={exporting || !data}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white text-xs font-bold tracking-wide rounded-xl hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gray-900 text-white text-xs font-bold tracking-wide rounded-xl hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
           >
             <Download size={13} />
             {exporting ? 'EXPORTING…' : 'EXPORT'}
@@ -1065,44 +1138,52 @@ export function OverviewTab() {
       )}
 
       {/* ── KPI cards ─────────────────────────────────────────────────── */}
-      <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr 1fr 3px 1fr' }}>
+      {/* Mobile: horizontal-scroll carousel (cards need real width to stay legible).
+          md+: fixed 5-column grid (3 cards, divider, AI Cost card). */}
+      <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-1 -mx-6 px-6 md:mx-0 md:px-0 md:grid md:overflow-visible md:grid-cols-[1fr_1fr_1fr_3px_1fr]">
         {isLoading || !tileVals ? (
           <>
-            <KpiCardSkeleton /><KpiCardSkeleton /><KpiCardSkeleton />
-            <div className="bg-black self-stretch" />
-            <KpiCardSkeleton />
+            <div className="min-w-[260px] max-w-[80vw] shrink-0 md:min-w-0 md:shrink"><KpiCardSkeleton /></div>
+            <div className="min-w-[260px] max-w-[80vw] shrink-0 md:min-w-0 md:shrink"><KpiCardSkeleton /></div>
+            <div className="min-w-[260px] max-w-[80vw] shrink-0 md:min-w-0 md:shrink"><KpiCardSkeleton /></div>
+            <div className="hidden md:block bg-black self-stretch" />
+            <div className="min-w-[260px] max-w-[80vw] shrink-0 md:min-w-0 md:shrink"><KpiCardSkeleton /></div>
           </>
         ) : (
           <>
             {[1, 2, 3].map(i => (
+              <div key={TILE_META[i].id} className="min-w-[260px] max-w-[80vw] shrink-0 snap-start md:min-w-0 md:shrink md:snap-align-none">
+                <KpiCard
+                  meta={TILE_META[i]} val={tileVals[i]} period={period} vsPlan={vsPlan}
+                  isSelected={selectedKpi === TILE_META[i].id}
+                  onClick={() => setSelectedKpi(TILE_META[i].id)}
+                  faContrib={faContribs[TILE_META[i].id]}
+                  selectedFA={filterLabel}
+                />
+              </div>
+            ))}
+            <div className="hidden md:block bg-black self-stretch" />
+            <div className="min-w-[260px] max-w-[80vw] shrink-0 snap-start md:min-w-0 md:shrink md:snap-align-none">
               <KpiCard
-                key={TILE_META[i].id} meta={TILE_META[i]} val={tileVals[i]} period={period} vsPlan={vsPlan}
-                isSelected={selectedKpi === TILE_META[i].id}
-                onClick={() => setSelectedKpi(TILE_META[i].id)}
-                faContrib={faContribs[TILE_META[i].id]}
+                meta={TILE_META[0]} val={tileVals[0]} period={period} vsPlan={vsPlan}
+                isSelected={selectedKpi === TILE_META[0].id}
+                onClick={() => setSelectedKpi(TILE_META[0].id)}
+                faContrib={faContribs[TILE_META[0].id]}
                 selectedFA={filterLabel}
               />
-            ))}
-            <div className="bg-black self-stretch" />
-            <KpiCard
-              meta={TILE_META[0]} val={tileVals[0]} period={period} vsPlan={vsPlan}
-              isSelected={selectedKpi === TILE_META[0].id}
-              onClick={() => setSelectedKpi(TILE_META[0].id)}
-              faContrib={faContribs[TILE_META[0].id]}
-              selectedFA={filterLabel}
-            />
+            </div>
           </>
         )}
       </div>
 
       {/* ── Lower section ─────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-start justify-between px-1">
+        <div className="flex items-start flex-wrap gap-3 justify-between px-1">
           <div>
             <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
             <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <FilterPicker
               label="Area"
               items={availableAreas}
@@ -1118,8 +1199,8 @@ export function OverviewTab() {
           </div>
         </div>
 
-        <div className="flex gap-4 items-start">
-          <div className="flex-[7] min-w-0">
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          <div className="w-full lg:flex-[7] min-w-0">
             {isLoading || !drill
               ? <WidgetSkeleton />
               : <UseCaseWidget
@@ -1132,7 +1213,7 @@ export function OverviewTab() {
                 />
             }
           </div>
-          <div className="flex-[3] min-w-0">
+          <div className="w-full lg:flex-[3] min-w-0">
             {isLoading || !drill
               ? <WidgetSkeleton />
               : <SummaryWidget

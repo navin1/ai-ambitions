@@ -36,7 +36,7 @@ TILE_META: dict[str, dict] = {
 KPI_ORDER = ["ai-cost", "revenue", "nps", "efficiency"]
 
 # Simple in-process cache for overview responses to speed repeated loads
-# keyed by period -> (timestamp, response_dict)
+# keyed by "{fiscal_year}:{period}" -> (timestamp, response_dict)
 _OVERVIEW_CACHE: dict[str, tuple[float, dict]] = {}
 _OVERVIEW_CACHE_TTL = 0.0  # disabled — always fetch fresh from BigQuery
 
@@ -188,19 +188,38 @@ def _build_tile_val(kpi_id: str, row: dict, meta: dict) -> dict:
 
 # ── Overview data fetchers ────────────────────────────────────────────────────
 
-def fetch_kpi_summary(period: str, creds) -> list[dict]:
+def fetch_available_years(creds) -> list[int]:
+    """Distinct fiscal years present in the data, newest first."""
+    sql = f"""
+        SELECT DISTINCT fiscal_year FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_summary`
+        ORDER BY fiscal_year DESC
+    """
+    rows = _run_raw(sql, creds)
+    return [int(r["fiscal_year"]) for r in rows]
+
+
+def _resolve_fiscal_year(fiscal_year: Optional[int], creds) -> int:
+    if fiscal_year is not None:
+        return fiscal_year
+    years = fetch_available_years(creds)
+    if not years:
+        raise ValueError("No fiscal_year data found in ai_amb_kpi_summary")
+    return years[0]  # newest, since fetch_available_years orders DESC
+
+
+def fetch_kpi_summary(period: str, fiscal_year: int, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
         SELECT kpi_id, actual_value, plan_value, actual_delta, delta_label,
                range_min, range_max, target_min, target_max
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_summary`
-        WHERE period = '{period}'
+        WHERE period = '{period}' AND fiscal_year = {int(fiscal_year)}
     """
     return _run_raw(sql, creds)
 
 
-def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
+def fetch_kpi_breakdown(period: str, fiscal_year: int, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
@@ -208,13 +227,13 @@ def fetch_kpi_breakdown(period: str, creds) -> list[dict]:
                current_phase, functional_area, revenue_actual_dollars, revenue_plan_dollars,
                revenue_notes, nps_notes, efficiency_notes
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_breakdown_v`
-        WHERE period = '{period}'
+        WHERE period = '{period}' AND fiscal_year = {int(fiscal_year)}
         ORDER BY kpi_id, dimension_type, actual_value DESC
     """
     return _run_raw(sql, creds)
 
 
-def fetch_investment(period: str, creds) -> list[dict]:
+def fetch_investment(period: str, fiscal_year: int, creds) -> list[dict]:
     if period not in VALID_PERIODS:
         raise ValueError(f"Invalid period '{period}'. Must be one of {VALID_PERIODS}")
     sql = f"""
@@ -222,16 +241,21 @@ def fetch_investment(period: str, creds) -> list[dict]:
                description, csg, functional_area, current_phase,
                revenue_notes, nps_notes, efficiency_notes
         FROM `{PROJECT_ID}.{DATASET}.ai_amb_investment_breakdown_v`
-        WHERE period = '{period}'
+        WHERE period = '{period}' AND fiscal_year = {int(fiscal_year)}
         ORDER BY dimension_type, actual_amount DESC
     """
     return _run_raw(sql, creds)
 
 
-def build_overview_response(period: str, creds) -> dict:
-    """Fetches BQ data and assembles the full overview API response."""
-    # Return cached response when fresh
-    cached = _OVERVIEW_CACHE.get(period)
+def build_overview_response(period: str, creds, fiscal_year: Optional[int] = None) -> dict:
+    """Fetches BQ data and assembles the full overview API response.
+
+    fiscal_year defaults to the latest year present in the data when omitted.
+    """
+    fiscal_year = _resolve_fiscal_year(fiscal_year, creds)
+
+    cache_key = f"{fiscal_year}:{period}"
+    cached = _OVERVIEW_CACHE.get(cache_key)
     if cached:
         ts, payload = cached
         if time.time() - ts < _OVERVIEW_CACHE_TTL:
@@ -239,9 +263,9 @@ def build_overview_response(period: str, creds) -> dict:
 
     # Run the three BigQuery reads in parallel to reduce end-to-end latency
     with ThreadPoolExecutor(max_workers=3) as pool:
-        fut_kpi = pool.submit(fetch_kpi_summary,   period, creds)
-        fut_inv = pool.submit(fetch_investment,     period, creds)
-        fut_brk = pool.submit(fetch_kpi_breakdown,  period, creds)
+        fut_kpi = pool.submit(fetch_kpi_summary,   period, fiscal_year, creds)
+        fut_inv = pool.submit(fetch_investment,     period, fiscal_year, creds)
+        fut_brk = pool.submit(fetch_kpi_breakdown,  period, fiscal_year, creds)
         kpi_rows      = fut_kpi.result()
         inv_rows      = fut_inv.result()
         breakdown_rows = fut_brk.result()
@@ -330,6 +354,7 @@ def build_overview_response(period: str, creds) -> dict:
             target["byVendor"].append(item)
 
     return {
+        "fiscalYear": fiscal_year,
         "kpis": kpis,
         "investment": {
             "byCategory": by_category,

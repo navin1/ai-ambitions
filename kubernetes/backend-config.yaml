@@ -3,20 +3,33 @@
 # This ConfigMap is mounted into the IG sidecar at /var/ig/config/routes/.
 # IG reads each *.json file as a route definition on startup.
 #
-# What this route does:
-#   1. SingleSignOnFilter — validates the AM SSO cookie against ForgeRock AM.
-#      Unauthenticated requests are redirected to the AM login page.
-#   2. HeaderFilter (remove) — strips any incoming X-FR-* headers to prevent
-#      client spoofing before they reach the application.
-#   3. HeaderFilter (inject) — adds X-FR-Username and X-FR-Email from the
-#      validated session attributes so the app can read the identity.
-#   4. ReverseProxyHandler — forwards the enriched request to the app container
-#      on localhost:8000 (internal port, not exposed outside the pod).
+# The app owns its own login/logout UI (frontend/src/pages/LoginPage.tsx,
+# LogoutPage.tsx) rather than using AM's hosted login page: the login page
+# authenticates against AM's REST API directly (backend/auth.py::am_authenticate)
+# and sets the resulting AM SSO cookie itself. Because of that, IG must NOT
+# redirect-on-unauthenticated for the SPA shell/assets or the auth endpoints —
+# only the data APIs need a validated session. Hence two mutually-exclusive
+# routes below instead of one blanket "^/" route:
+#
+#   1. "ai-ambitions-data"   — SSO-protected. Matches the BigQuery/AI data APIs
+#      plus /api/admin/* (e.g. the GCS file-upload endpoint). SingleSignOnFilter
+#      validates the AM cookie set at login and injects X-FR-Username/X-FR-Email/
+#      X-FR-Groups; unauthenticated requests here are rejected. The backend's
+#      own require_role("admin") dependency (backend/auth.py) does the further
+#      admin-vs-user check for /api/admin/* on top of this.
+#   2. "ai-ambitions-public" — everything else (SPA shell, static assets,
+#      /api/health, /api/me, /api/auth/login, /api/auth/logout). No SSO
+#      filter — the app itself decides what to render/allow. Identity
+#      headers are still stripped here to prevent client spoofing, and
+#      /api/me independently validates the AM cookie against AM
+#      (see auth.py::resolve_user) so the header shows the real user.
 #
 # Customise:
 #   • FORGEROCK_AM_URL, FORGEROCK_AM_REALM, FORGEROCK_AM_COOKIE_NAME in configmap.yaml
-#   • The session attribute names (uid, mail) to match your AM user profile schema
-#   • The route condition if you need to exclude paths (e.g. /api/health)
+#   • The session attribute names (uid, mail, memberOf) to match your AM user profile schema
+#   • FORGEROCK_ADMIN_GROUP in configmap.yaml once the admin AD group exists — the
+#     app resolves everyone to the "user" role until it's set (see backend/auth.py)
+#   • DATA_PATH_PATTERN below if new protected API routes are added
 
 apiVersion: v1
 kind: ConfigMap
@@ -24,10 +37,10 @@ metadata:
   name: ig-routes
   namespace: ai-ambitions
 data:
-  ai-ambitions.json: |
+  ai-ambitions-data.json: |
     {
-      "name": "ai-ambitions",
-      "condition": "${matches(request.uri.path, '^/')}",
+      "name": "ai-ambitions-data",
+      "condition": "${matches(request.uri.path, '^/api/(overview|query|chat|pdf|admin)($|/)')}",
       "handler": {
         "type": "Chain",
         "config": {
@@ -48,7 +61,8 @@ data:
                 "messageType": "REQUEST",
                 "remove": [
                   "${env['FORGEROCK_USERNAME_HEADER']}",
-                  "${env['FORGEROCK_EMAIL_HEADER']}"
+                  "${env['FORGEROCK_EMAIL_HEADER']}",
+                  "${env['FORGEROCK_GROUPS_HEADER']}"
                 ]
               }
             },
@@ -63,8 +77,42 @@ data:
                   ],
                   "${env['FORGEROCK_EMAIL_HEADER']}": [
                     "${contexts.ssoToken.info['mail'][0]}"
+                  ],
+                  "${env['FORGEROCK_GROUPS_HEADER']}": [
+                    "${join(contexts.ssoToken.info['memberOf'], ',')}"
                   ]
                 }
+              }
+            }
+          ],
+          "handler": {
+            "name": "AppProxy",
+            "type": "ReverseProxyHandler",
+            "config": {
+              "baseURI": "http://localhost:8000"
+            }
+          }
+        }
+      }
+    }
+  ai-ambitions-public.json: |
+    {
+      "name": "ai-ambitions-public",
+      "condition": "${not(matches(request.uri.path, '^/api/(overview|query|chat|pdf|admin)($|/)'))}",
+      "handler": {
+        "type": "Chain",
+        "config": {
+          "filters": [
+            {
+              "name": "StripIncomingIdentityHeaders",
+              "type": "HeaderFilter",
+              "config": {
+                "messageType": "REQUEST",
+                "remove": [
+                  "${env['FORGEROCK_USERNAME_HEADER']}",
+                  "${env['FORGEROCK_EMAIL_HEADER']}",
+                  "${env['FORGEROCK_GROUPS_HEADER']}"
+                ]
               }
             }
           ],

@@ -23,12 +23,20 @@ export interface KpiMetricItem  { label: string; value: number; plan?: number | 
 export interface KpiDrillData   { byCategory: KpiMetricItem[]; byUseCase: KpiMetricItem[]; byVendor: KpiMetricItem[] }
 
 export interface OverviewSummary {
+  fiscalYear: number
   kpis: TileVal[]
   investment: DrillData
   kpiBreakdown: { revenue: KpiDrillData; nps: KpiDrillData; efficiency: KpiDrillData }
 }
 
-export async function fetchOverviewSummary(period: string): Promise<OverviewSummary> {
-  const { data } = await client.get<OverviewSummary>(`/overview/summary?period=${period}`)
+export async function fetchOverviewSummary(period: string, fiscalYear?: number): Promise<OverviewSummary> {
+  const params = new URLSearchParams({ period })
+  if (fiscalYear !== undefined) params.set('fiscal_year', String(fiscalYear))
+  const { data } = await client.get<OverviewSummary>(`/overview/summary?${params.toString()}`)
+  return data
+}
+
+export async function fetchAvailableYears(): Promise<{ years: number[] }> {
+  const { data } = await client.get<{ years: number[] }>('/overview/years')
   return data
 }

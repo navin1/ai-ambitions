@@ -17,7 +17,7 @@ logging.basicConfig(
     force=True,
 )
 
-from routes import overview, query, chat, pdf
+from routes import overview, query, chat, pdf, auth as auth_routes, admin as admin_routes
 
 app = FastAPI(title="AI Ambitions Dashboard", version="1.0.0")
 
@@ -35,6 +35,8 @@ app.include_router(overview.router)
 app.include_router(query.router)
 app.include_router(chat.router)
 app.include_router(pdf.router)
+app.include_router(auth_routes.router)
+app.include_router(admin_routes.router)
 
 _logger = logging.getLogger("main")
 
@@ -68,10 +70,11 @@ async def health():
 
 @app.get("/api/me")
 async def me(request: Request):
-    """Returns the ForgeRock IG authenticated user identity (or dev fallback)."""
-    from auth import FORGEROCK_EMAIL_HEADER
-    email = request.headers.get(FORGEROCK_EMAIL_HEADER, "") or "dev@local"
-    return {"email": email}
+    """Returns the current identity: IG-injected headers, else a dev-mode login
+    cookie set by /api/auth/login, else unauthenticated."""
+    from auth import resolve_user
+    user = await resolve_user(request)
+    return user
 
 
 # ── Serve built React SPA in production ───────────────────────────────────────

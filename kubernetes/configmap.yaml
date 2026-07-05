@@ -16,12 +16,29 @@ data:
 
   # ── ForgeRock Identity Gateway ────────────────────────────────────────────────
   # These are read by the IG sidecar container (not the app). The app only reads
-  # FORGEROCK_EMAIL_HEADER and FORGEROCK_USERNAME_HEADER to know which headers
-  # IG will inject after session validation.
+  # FORGEROCK_EMAIL_HEADER / FORGEROCK_USERNAME_HEADER / FORGEROCK_GROUPS_HEADER
+  # to know which headers IG will inject after session validation.
   FORGEROCK_AM_URL: ""                       # e.g. https://am.example.com/am
   FORGEROCK_AM_REALM: "/"                    # AM realm (root realm by default)
   FORGEROCK_AM_COOKIE_NAME: "iPlanetDirectoryPro"  # AM SSO cookie name
   FORGEROCK_EMAIL_HEADER: "x-fr-email"       # header IG injects with user email
   FORGEROCK_USERNAME_HEADER: "x-fr-username" # header IG injects with username/uid
+  FORGEROCK_GROUPS_HEADER: "x-fr-groups"     # header IG injects with comma-separated AD group names
+
+  # ── AD-group-based roles ──────────────────────────────────────────────────────
+  # FORGEROCK_AM_GROUPS_ATTRIBUTE is the AM session property holding AD group
+  # membership (used by the app when it looks up AM sessions itself — see
+  # backend/auth.py::am_session_info). FORGEROCK_ADMIN_GROUP is the AD group
+  # name that grants the "admin" role. Fill in once the admin group exists —
+  # until then every authenticated user resolves to the "user" role.
+  FORGEROCK_AM_GROUPS_ATTRIBUTE: "memberOf"
+  FORGEROCK_ADMIN_GROUP: ""                  # e.g. "AI-Ambitions-Admins"
+
+  # ── Admin file upload (GCS) ───────────────────────────────────────────────────
+  # Bucket the /api/admin/upload endpoint (admin role only) writes to. The pod's
+  # Workload Identity service account needs Storage Object Creator on this bucket.
+  GCS_PROJECT_ID: "mygclearning"              # defaults to BIGQUERY_PROJECT_ID if unset
+  GCS_UPLOAD_BUCKET: ""                       # e.g. "ai-ambitions-uploads"
+  GCS_UPLOAD_PREFIX: "uploads"                # folder prefix inside the bucket
 
   LOG_LEVEL: "INFO"
