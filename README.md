@@ -204,7 +204,10 @@ kubectl logs -n ai-ambitions -l app=ai-ambitions-backend
 The container runs Playwright Chromium. Check logs for `BrowserType.launch` errors. `backend/Dockerfile` sets `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` so Chromium is accessible to the non-root `appuser`.
 
 **BigQuery auth errors**
-Ensure the GCP SA `ai-ambitions-app@mygclearning.iam.gserviceaccount.com` has `roles/bigquery.dataViewer` and `roles/bigquery.jobUser`, and that the Workload Identity binding is in place (`deploy-gke.sh` handles this automatically).
+Ensure the GCP SA `ai-ambitions-app@mygclearning.iam.gserviceaccount.com` has `roles/bigquery.jobUser` (project-level) and `roles/bigquery.dataEditor` (scoped to the `ai_ambitions` dataset — `dataViewer` is read-only and not sufficient for the admin Excel-upload pipeline), and that the Workload Identity binding is in place (`deploy-gke.sh` handles this automatically).
+
+**Admin upload fails with a GCS or BigQuery error**
+Confirm the SA also has `roles/storage.objectAdmin` scoped to the `GCS_UPLOAD_BUCKET`. Separately: don't expose this app publicly until a real ForgeRock IG sidecar is deployed in front of the backend (see the gap note at the top of `kubernetes/deployment-backend.yaml`) — without it, nothing stops a caller from forging the `x-fr-groups` header themselves and granting their own request admin access.
 
 **Frontend pod not starting**
 ```bash

@@ -1,6 +1,7 @@
 import os
 import logging
 import time
+import uuid
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -70,6 +71,135 @@ def _run_raw(sql: str, creds) -> list[dict]:
             record[key] = val
         result.append(record)
     return result
+
+
+# ── Excel-import replace (admin upload pipeline) ──────────────────────────────
+# Column order mirrors bigquery/schema.sql (excluding update_ts, stamped here).
+
+KPI_SUMMARY_TABLE = "ai_amb_kpi_summary"
+USE_CASE_TABLE = "ai_amb_use_case_data"
+
+KPI_SCHEMA = [
+    ("fiscal_year", "INT64"), ("period", "STRING"), ("kpi_id", "STRING"),
+    ("actual_value", "FLOAT64"), ("plan_value", "FLOAT64"), ("actual_delta", "FLOAT64"),
+    ("delta_label", "STRING"), ("range_min", "FLOAT64"), ("range_max", "FLOAT64"),
+    ("target_min", "FLOAT64"), ("target_max", "FLOAT64"),
+]
+
+USE_CASE_SCHEMA = [
+    ("fiscal_year", "INT64"), ("period", "STRING"), ("use_case", "STRING"),
+    ("description", "STRING"), ("csg", "STRING"), ("functional_area", "STRING"),
+    ("cost_actual", "FLOAT64"), ("cost_plan", "FLOAT64"),
+    ("revenue_actual", "FLOAT64"), ("revenue_plan", "FLOAT64"),
+    ("revenue_actual_dollars", "FLOAT64"), ("revenue_plan_dollars", "FLOAT64"), ("revenue_notes", "STRING"),
+    ("nps_actual", "FLOAT64"), ("nps_plan", "FLOAT64"), ("nps_notes", "STRING"),
+    ("efficiency_actual", "FLOAT64"), ("efficiency_plan", "FLOAT64"), ("efficiency_notes", "STRING"),
+    ("current_phase", "STRING"),
+]
+
+
+def _replace_table(client, rows: list[dict], columns: list[tuple[str, str]], table_name: str) -> int:
+    """Loads `rows` into a temp staging table, then atomically deletes any existing
+    rows sharing a (fiscal_year, period) with the new data and inserts the new
+    rows in their place — scoped replace, not a full-table wipe."""
+    from google.cloud import bigquery
+    import pandas as pd
+
+    if not rows:
+        return 0
+
+    col_names = [name for name, _ in columns]
+    df = pd.DataFrame(rows).reindex(columns=col_names)
+
+    target_ref = f"{PROJECT_ID}.{DATASET}.{table_name}"
+    stg_ref = f"{PROJECT_ID}.{DATASET}._stg_{table_name}_{uuid.uuid4().hex[:12]}"
+
+    schema = [bigquery.SchemaField(name, bq_type) for name, bq_type in columns]
+    job_config = bigquery.LoadJobConfig(schema=schema, write_disposition="WRITE_TRUNCATE")
+    client.load_table_from_dataframe(df, stg_ref, job_config=job_config).result()
+
+    try:
+        col_list = ", ".join(col_names)
+        script = f"""
+        BEGIN TRANSACTION;
+        DELETE FROM `{target_ref}` t
+        WHERE EXISTS (
+          SELECT 1 FROM `{stg_ref}` s
+          WHERE s.fiscal_year = t.fiscal_year AND s.period = t.period
+        );
+        INSERT INTO `{target_ref}` ({col_list}, update_ts)
+        SELECT {col_list}, CURRENT_TIMESTAMP() FROM `{stg_ref}`;
+        COMMIT TRANSACTION;
+        """
+        client.query(script).result()
+    finally:
+        client.delete_table(stg_ref, not_found_ok=True)
+
+    return len(rows)
+
+
+def replace_periods(kpi_rows: list[dict], use_case_rows: list[dict], creds) -> tuple[int, int]:
+    """Replaces rows in both tables scoped to the (fiscal_year, period) pairs
+    present in the uploaded data; other years/periods are left untouched."""
+    client = _client(creds)
+    kpi_count = _replace_table(client, kpi_rows, KPI_SCHEMA, KPI_SUMMARY_TABLE)
+    use_case_count = _replace_table(client, use_case_rows, USE_CASE_SCHEMA, USE_CASE_TABLE)
+    return kpi_count, use_case_count
+
+
+UPLOAD_AUDIT_TABLE = "ai_amb_upload_audit"
+
+
+def log_upload_audit(
+    *,
+    uploaded_by: str,
+    filename: str,
+    fiscal_year: Optional[int],
+    period: Optional[str],
+    outcome: str,
+    kpi_rows_loaded: int,
+    use_case_rows_loaded: int,
+    errors: list,
+    warning: Optional[str],
+    gcs_path: str,
+    creds,
+) -> None:
+    """Best-effort audit log of an admin Excel-upload attempt into
+    ai_amb_upload_audit. Never raises — a logging failure must not affect the
+    actual upload outcome already returned to the caller."""
+    import json
+    from datetime import datetime, timezone
+    from google.cloud import bigquery
+
+    try:
+        client = _client(creds)
+        table_ref = f"{PROJECT_ID}.{DATASET}.{UPLOAD_AUDIT_TABLE}"
+        errors_json = json.dumps([e.model_dump() for e in errors]) if errors else None
+        query = f"""
+            INSERT INTO `{table_ref}`
+              (upload_ts, uploaded_by, filename, fiscal_year, period, outcome,
+               kpi_rows_loaded, use_case_rows_loaded, error_count, errors_json, warning, gcs_path)
+            VALUES
+              (@upload_ts, @uploaded_by, @filename, @fiscal_year, @period, @outcome,
+               @kpi_rows_loaded, @use_case_rows_loaded, @error_count, @errors_json, @warning, @gcs_path)
+        """
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("upload_ts", "TIMESTAMP", datetime.now(timezone.utc)),
+            bigquery.ScalarQueryParameter("uploaded_by", "STRING", uploaded_by),
+            bigquery.ScalarQueryParameter("filename", "STRING", filename),
+            bigquery.ScalarQueryParameter("fiscal_year", "INT64", fiscal_year),
+            bigquery.ScalarQueryParameter("period", "STRING", period),
+            bigquery.ScalarQueryParameter("outcome", "STRING", outcome),
+            bigquery.ScalarQueryParameter("kpi_rows_loaded", "INT64", kpi_rows_loaded),
+            bigquery.ScalarQueryParameter("use_case_rows_loaded", "INT64", use_case_rows_loaded),
+            bigquery.ScalarQueryParameter("error_count", "INT64", len(errors)),
+            bigquery.ScalarQueryParameter("errors_json", "STRING", errors_json),
+            bigquery.ScalarQueryParameter("warning", "STRING", warning),
+            bigquery.ScalarQueryParameter("gcs_path", "STRING", gcs_path),
+        ])
+        client.query(query, job_config=job_config).result()
+    except Exception:
+        logger.warning("log_upload_audit: failed to write audit row for %s", filename, exc_info=True)
 
 
 def build_schema_context(token: Optional[str] = None) -> str:

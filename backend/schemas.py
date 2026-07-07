@@ -30,3 +30,21 @@ class PDFRequest(BaseModel):
     tab_name: str
     title: str
     widgets: list[dict[str, Any]]
+
+
+class RowError(BaseModel):
+    sheet: str
+    row: Optional[int] = None
+    column: Optional[str] = None
+    message: str
+
+
+class ImportResponse(BaseModel):
+    filename: str
+    gcs_path: str
+    success: bool
+    periods_replaced: list[dict[str, Any]] = []
+    kpi_rows_loaded: int = 0
+    use_case_rows_loaded: int = 0
+    errors: list[RowError] = []
+    warning: Optional[str] = None

@@ -41,9 +41,13 @@ DEV_SESSION_COOKIE = "dev_session"
 # reads it straight from AM session info since that route bypasses IG's filter.
 # FORGEROCK_ADMIN_GROUP is the AD group name that grants the "admin" role —
 # leave empty until the group actually exists (everyone resolves to "user").
+# FORGEROCK_ACCESS_GROUP, if set, is required just to reach the app at all
+# (admins are always let through even if not separately listed in it) — leave
+# empty to keep today's behavior of "any authenticated user can view".
 FORGEROCK_GROUPS_HEADER = os.getenv("FORGEROCK_GROUPS_HEADER", "x-fr-groups")
 FORGEROCK_AM_GROUPS_ATTRIBUTE = os.getenv("FORGEROCK_AM_GROUPS_ATTRIBUTE", "memberOf")
 FORGEROCK_ADMIN_GROUP = os.getenv("FORGEROCK_ADMIN_GROUP", "")
+FORGEROCK_ACCESS_GROUP = os.getenv("FORGEROCK_ACCESS_GROUP", "")
 
 
 def _parse_groups_header(raw: str) -> list[str]:
@@ -51,9 +55,25 @@ def _parse_groups_header(raw: str) -> list[str]:
 
 
 def _resolve_role(groups: list[str]) -> str:
-    if FORGEROCK_ADMIN_GROUP and FORGEROCK_ADMIN_GROUP in groups:
-        return "admin"
+    if FORGEROCK_ADMIN_GROUP:
+        if FORGEROCK_ADMIN_GROUP in groups:
+            return "admin"
+        logger.debug(
+            "_resolve_role: groups=%s did not include admin group '%s' — resolving to 'user'",
+            groups, FORGEROCK_ADMIN_GROUP,
+        )
     return "user"
+
+
+def _check_access_group(user: dict) -> None:
+    """Raises 403 if FORGEROCK_ACCESS_GROUP is configured and the user isn't in
+    it — admins always pass. No-op when FORGEROCK_ACCESS_GROUP is unset."""
+    if FORGEROCK_ACCESS_GROUP and user["role"] != "admin" and FORGEROCK_ACCESS_GROUP not in user["groups"]:
+        logger.warning(
+            "access denied: user=%s not in required access group '%s' (groups=%s)",
+            user["id"], FORGEROCK_ACCESS_GROUP, user["groups"],
+        )
+        raise HTTPException(status_code=403, detail="Not authorized to access this application")
 
 
 async def resolve_user(request: Request) -> dict:
@@ -84,14 +104,30 @@ async def resolve_user(request: Request) -> dict:
     return {"id": "dev-user", "email": "dev@local", "authenticated": False, "groups": [], "role": "user"}
 
 
-def require_role(*allowed_roles: str):
-    """FastAPI dependency factory gating a route by resolved role.
+def require_authenticated():
+    """FastAPI dependency: any authenticated user, additionally gated by
+    FORGEROCK_ACCESS_GROUP membership when that's configured. Used on the
+    data routers (overview/query/chat/pdf) in main.py."""
+    async def _check(request: Request) -> dict:
+        user = await resolve_user(request)
+        if not user["authenticated"]:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        _check_access_group(user)
+        return user
+    return _check
 
-    Not wired to any route yet — no admin-only feature exists. Attach it once
-    one does, e.g. dependencies=[Depends(require_role("admin"))].
+
+def require_role(*allowed_roles: str):
+    """FastAPI dependency factory gating a route by resolved role. Also enforces
+    authentication and FORGEROCK_ACCESS_GROUP (see require_authenticated).
+
+    Used by /api/admin/* routes, e.g. dependencies=[Depends(require_role("admin"))].
     """
     async def _check(request: Request) -> dict:
         user = await resolve_user(request)
+        if not user["authenticated"]:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        _check_access_group(user)
         if user["role"] not in allowed_roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return user

@@ -25,6 +25,8 @@ CLUSTER="ai-ambitions-cluster"
 REPO="ai-ambitions"
 NAMESPACE="ai-ambitions"
 APP_SA="ai-ambitions-app"
+BQ_DATASET="ai_ambitions"          # must match BIGQUERY_DATASET in configmap.yaml
+GCS_UPLOAD_BUCKET=""                # must match GCS_UPLOAD_BUCKET in configmap.yaml — required
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 step() { echo; echo "▶ $*"; }
@@ -32,11 +34,12 @@ ok()   { echo "  ✓ $*"; }
 
 # ── 1. Prerequisite check ─────────────────────────────────────────────────────
 step "Checking required tools"
-for tool in gcloud kubectl; do
+for tool in gcloud kubectl bq; do
   if ! command -v "$tool" &>/dev/null; then
     echo "  ERROR: '$tool' not found. Install it and re-run."
     echo "    gcloud  → https://cloud.google.com/sdk/docs/install"
     echo "    kubectl → gcloud components install kubectl"
+    echo "    bq      → included with the Cloud SDK (gcloud components install bq)"
     exit 1
   fi
   ok "$tool found"
@@ -105,15 +108,41 @@ else
   ok "Service account '$APP_SA_EMAIL' created"
 fi
 
-step "Granting BigQuery roles to app service account"
-for role in roles/bigquery.dataViewer roles/bigquery.jobUser; do
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+step "Granting BigQuery jobUser (project-level — job execution isn't a dataset resource)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${APP_SA_EMAIL}" \
+  --role="roles/bigquery.jobUser" \
+  --condition=None \
+  --quiet
+ok "Granted roles/bigquery.jobUser"
+
+step "Granting BigQuery dataEditor, scoped to the '$BQ_DATASET' dataset only"
+# dataEditor (not dataViewer) is required: the admin Excel-upload pipeline
+# (backend/routes/admin.py -> bigquery_client.replace_periods) creates a
+# staging table, runs DELETE+INSERT DML, then drops the staging table.
+# Scoped to the dataset (via `bq`, not `gcloud projects`) rather than the
+# whole project, so the SA can't write to unrelated datasets.
+bq add-iam-policy-binding \
+  --member="serviceAccount:${APP_SA_EMAIL}" \
+  --role="roles/bigquery.dataEditor" \
+  "${PROJECT_ID}:${BQ_DATASET}"
+ok "Granted roles/bigquery.dataEditor on dataset '$BQ_DATASET'"
+
+step "Granting Storage objectAdmin, scoped to the upload bucket only"
+if [[ -z "$GCS_UPLOAD_BUCKET" ]]; then
+  echo "  WARNING: GCS_UPLOAD_BUCKET is not set at the top of this script — skipping."
+  echo "  The admin upload pipeline (input/ -> archive/success|failure/) needs"
+  echo "  roles/storage.objectAdmin on that bucket. Set GCS_UPLOAD_BUCKET and re-run,"
+  echo "  or grant it manually:"
+  echo "    gcloud storage buckets add-iam-policy-binding gs://YOUR_BUCKET \\"
+  echo "      --member=\"serviceAccount:${APP_SA_EMAIL}\" --role=roles/storage.objectAdmin"
+else
+  gcloud storage buckets add-iam-policy-binding "gs://${GCS_UPLOAD_BUCKET}" \
     --member="serviceAccount:${APP_SA_EMAIL}" \
-    --role="$role" \
-    --condition=None \
+    --role="roles/storage.objectAdmin" \
     --quiet
-  ok "Granted $role"
-done
+  ok "Granted roles/storage.objectAdmin on gs://$GCS_UPLOAD_BUCKET"
+fi
 
 # ── 8. Workload Identity binding ──────────────────────────────────────────────
 step "Binding Kubernetes SA to GCP SA (Workload Identity)"

@@ -1,3 +1,24 @@
+# ── SECURITY GAP — READ BEFORE DEPLOYING ────────────────────────────────────
+# The forgerock-ig container below is a PLACEHOLDER (image not yet set) — this
+# manifest is not deployable as-is. Until a real IG image is wired in here:
+#   • backend/auth.py::resolve_user() trusts x-fr-email/x-fr-username/x-fr-groups
+#     headers unconditionally whenever they're present, on the assumption that
+#     IG has validated the AM session and injected them itself (see
+#     kubernetes/backend-config.yaml).
+#   • With no IG actually in front of the app container, ANY request that
+#     reaches this Service/Ingress can set those headers directly (e.g.
+#     `x-fr-groups: <your admin group name>`) and grant itself any role —
+#     there is no enforcement in front of the app to stop it.
+#   • Do not expose this Service/Ingress on a real domain until the IG
+#     container below is real and service-backend.yaml's targetPort has been
+#     confirmed to route through it.
+#
+# To finish this: replace `image:` on the forgerock-ig container with your
+# licensed ForgeRock IG image (internal registry / Artifact Registry mirror).
+# Route config (ig-routes ConfigMap, mounted below) covers routing only — IG
+# also needs its own base config (admin.json, keystore, etc.) which isn't
+# modeled here; consult your IG deployment docs for what else needs mounting.
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,11 +38,26 @@ spec:
     spec:
       serviceAccountName: ai-ambitions-ksa
       containers:
+      # ── ForgeRock IG sidecar — validates the AM session and injects
+      # x-fr-* identity headers before proxying to the app container below.
+      # See the gap note at the top of this file: image is a placeholder.
+      - name: forgerock-ig
+        image: REPLACE_ME/forgerock-ig:REPLACE_ME  # TODO: real licensed IG image
+        ports:
+        - containerPort: 8080
+          name: ig-http
+        envFrom:
+        - configMapRef:
+            name: ai-ambitions-config
+        volumeMounts:
+        - name: ig-routes
+          mountPath: /var/ig/config/routes
+          readOnly: true
       - name: ai-ambitions-backend
         image: us-central1-docker.pkg.dev/mygclearning/ai-ambitions/ai-ambitions-backend:latest
         ports:
         - containerPort: 8000
-          name: http
+          name: app-http
         envFrom:
         - configMapRef:
             name: ai-ambitions-config
@@ -50,3 +86,7 @@ spec:
           runAsNonRoot: true
           runAsUser: 1000
           allowPrivilegeEscalation: false
+      volumes:
+      - name: ig-routes
+        configMap:
+          name: ig-routes

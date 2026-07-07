@@ -36,7 +36,8 @@ export async function* streamChatMessage(
   message: string,
   history: ChatMessage[]
 ): AsyncGenerator<StreamEvent> {
-  // No Authorization header — IAP handles authentication
+  // No Authorization header — ForgeRock IG validates the session and injects
+  // identity headers server-side (see kubernetes/backend-config.yaml)
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

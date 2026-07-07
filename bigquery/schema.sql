@@ -6,9 +6,10 @@
 --   1. schema.sql    — this file (DROP + CREATE)
 --   2. seed_data.sql — INSERT statements
 --
--- Table inventory (2 tables):
+-- Table inventory (3 tables):
 --   ai_amb_kpi_summary    — headline KPI tiles (fiscal_year × period × kpi_id)
 --   ai_amb_use_case_data  — flat fact: all use-case metrics per fiscal_year × period
+--   ai_amb_upload_audit   — audit log of admin Excel-upload attempts
 --
 -- View inventory (2 views):
 --   ai_amb_investment_breakdown_v  — use-case spend rows
@@ -72,6 +73,25 @@ CREATE TABLE `ai_ambitions.ai_amb_use_case_data` (
   efficiency_notes   STRING             OPTIONS(description="Free-text note for this use case's efficiency contribution"),
   current_phase      STRING             OPTIONS(description='Delivery phase: Planning | Pilot | Scaling | Production'),
   update_ts          TIMESTAMP          OPTIONS(description='Last refresh timestamp')
+);
+
+-- Table: ai_amb_upload_audit
+-- One row per admin Excel-upload attempt (backend/routes/admin.py). The file
+-- itself and full error detail also land in GCS (archive/success|failure/ +
+-- .errors.json) — this table just makes that history queryable from BigQuery.
+CREATE TABLE `ai_ambitions.ai_amb_upload_audit` (
+  upload_ts             TIMESTAMP NOT NULL OPTIONS(description='When this upload attempt was processed'),
+  uploaded_by           STRING    NOT NULL OPTIONS(description='Resolved user id/email of the uploading admin'),
+  filename              STRING    NOT NULL OPTIONS(description='Original uploaded filename'),
+  fiscal_year           INT64             OPTIONS(description='Declared fiscal year; NULL if the filename itself was rejected'),
+  period                STRING            OPTIONS(description='Declared period; NULL if the filename itself was rejected'),
+  outcome               STRING    NOT NULL OPTIONS(description='success | failure'),
+  kpi_rows_loaded       INT64     NOT NULL OPTIONS(description='Rows loaded into ai_amb_kpi_summary; 0 on failure'),
+  use_case_rows_loaded  INT64     NOT NULL OPTIONS(description='Rows loaded into ai_amb_use_case_data; 0 on failure'),
+  error_count           INT64     NOT NULL OPTIONS(description='Number of validation/processing errors'),
+  errors_json           STRING            OPTIONS(description='JSON-serialized RowError[]; NULL on success'),
+  warning               STRING            OPTIONS(description='Set when data loaded but GCS archiving did not fully complete'),
+  gcs_path              STRING            OPTIONS(description='gs:// path of the archived file (or the input/ orphan, in the warning case)')
 );
 
 

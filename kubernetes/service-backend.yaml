@@ -1,3 +1,7 @@
+# Routes through the forgerock-ig sidecar (port 8080), not directly to the app
+# container (port 8000) — see the gap note in deployment-backend.yaml. IG's
+# route config (kubernetes/backend-config.yaml) proxies validated requests on
+# to http://localhost:8000 inside the pod.
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,5 +14,5 @@ spec:
   ports:
   - name: http
     port: 8000
-    targetPort: 8000
+    targetPort: ig-http
     protocol: TCP

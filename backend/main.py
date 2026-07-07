@@ -1,7 +1,7 @@
 import os
 import logging
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -17,11 +17,12 @@ logging.basicConfig(
     force=True,
 )
 
+import auth
 from routes import overview, query, chat, pdf, auth as auth_routes, admin as admin_routes
 
 app = FastAPI(title="AI Ambitions Dashboard", version="1.0.0")
 
-# CORS — dev only; in prod all traffic goes through the GKE Ingress / IAP
+# CORS — dev only; in prod all traffic goes through the GKE Ingress / ForgeRock IG
 _cors_origins = ["http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
@@ -31,10 +32,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(overview.router)
-app.include_router(query.router)
-app.include_router(chat.router)
-app.include_router(pdf.router)
+# overview/query/chat/pdf require any authenticated user (+ FORGEROCK_ACCESS_GROUP
+# membership if configured); admin.py's own require_role("admin") layers the
+# admin-group check on top for /api/admin/*.
+_data_router_deps = [Depends(auth.require_authenticated())]
+app.include_router(overview.router, dependencies=_data_router_deps)
+app.include_router(query.router, dependencies=_data_router_deps)
+app.include_router(chat.router, dependencies=_data_router_deps)
+app.include_router(pdf.router, dependencies=_data_router_deps)
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 
