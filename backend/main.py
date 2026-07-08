@@ -20,6 +20,11 @@ logging.basicConfig(
 import auth
 from routes import overview, query, chat, pdf, auth as auth_routes, admin as admin_routes
 
+logging.getLogger("main").info(
+    "auth mode: %s",
+    f"ForgeRock AM ({auth.FORGEROCK_AM_URL})" if auth.FORGEROCK_AM_URL else "dev-fallback (FORGEROCK_AM_URL not set)",
+)
+
 app = FastAPI(title="AI Ambitions Dashboard", version="1.0.0")
 
 # CORS — dev only; in prod all traffic goes through the GKE Ingress / ForgeRock IG

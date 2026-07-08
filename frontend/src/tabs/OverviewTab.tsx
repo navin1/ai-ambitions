@@ -1098,11 +1098,14 @@ export function OverviewTab() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Overview</h1>
-            {isFetching && !isLoading && (
-              <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full animate-pulse">
-                refreshing…
-              </span>
-            )}
+            <span
+              className={clsx(
+                'text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full animate-pulse',
+                isFetching && !isLoading ? 'visible' : 'invisible',
+              )}
+            >
+              refreshing…
+            </span>
           </div>
           <p className="text-xs text-gray-400 mt-0.5 font-medium tracking-wide">
             {displayYear !== undefined ? `FY${String(displayYear).slice(-2)}` : 'FY26'} · AI investment performance tracker

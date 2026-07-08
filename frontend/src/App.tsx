@@ -45,7 +45,7 @@ function Dashboard({ user, onLogout }: { user: CurrentUser; onLogout: () => void
         onUploadClick={() => setShowUpload(true)}
       />
 
-      <main className="flex-1 min-h-0 overflow-auto pb-14">
+      <main className="flex-1 min-h-0 overflow-auto pb-14" style={{ scrollbarGutter: 'stable' }}>
         <OverviewTab />
       </main>
 

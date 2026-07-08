@@ -3,6 +3,7 @@ import os
 import json
 import pathlib
 import subprocess
+import time
 from dotenv import load_dotenv
 from fastapi import Header, HTTPException, Request
 from typing import Optional
@@ -312,6 +313,16 @@ def get_gcs_credentials():
     return get_gcp_credentials(scopes=["https://www.googleapis.com/auth/devstorage.read_write"])
 
 
+# Resolved credentials are cached per scope-set so repeated calls (e.g. one per
+# API request) don't each re-spawn the gcloud CLI. Credentials from branches
+# 1/2/4 below carry a refresh token (or use the metadata server) and refresh
+# themselves under the hood, so they're safe to cache indefinitely. The bare
+# print-access-token fallback (branch 3) has no refresh token, so it's cached
+# with a TTL short enough to always re-resolve before the ~1h token expires.
+_creds_cache: dict[tuple[str, ...], tuple[object, Optional[float]]] = {}
+_PRINT_TOKEN_TTL_SECONDS = 45 * 60
+
+
 def get_gcp_credentials(scopes: list[str]):
     """Return Google Cloud credentials for the given scopes.
 
@@ -328,6 +339,13 @@ def get_gcp_credentials(scopes: list[str]):
     from google.oauth2 import credentials as oauth2_creds
     import google.auth
 
+    cache_key = tuple(sorted(scopes))
+    cached = _creds_cache.get(cache_key)
+    if cached is not None:
+        creds, expires_at = cached
+        if expires_at is None or expires_at > time.monotonic():
+            return creds
+
     # 1. Explicit service-account JSON
     if SERVICE_ACCOUNT_FILE and os.path.exists(SERVICE_ACCOUNT_FILE):
         logger.info("get_gcp_credentials: using GOOGLE_APPLICATION_CREDENTIALS file")
@@ -340,24 +358,29 @@ def get_gcp_credentials(scopes: list[str]):
             )
         else:
             creds, _ = google.auth.load_credentials_from_file(SERVICE_ACCOUNT_FILE)
+        _creds_cache[cache_key] = (creds, None)
         return creds
 
     # 2. gcloud auth login (dev — stored refresh token, auto-refreshes)
     gcloud_creds = _get_gcloud_login_credentials()
     if gcloud_creds is not None:
         logger.info("get_gcp_credentials: using gcloud auth login credentials")
+        _creds_cache[cache_key] = (gcloud_creds, None)
         return gcloud_creds
 
     # 3. gcloud auth print-access-token (dev fallback)
     gcloud_token = _get_gcloud_print_token()
     if gcloud_token:
         logger.info("get_gcp_credentials: using token from gcloud auth print-access-token")
-        return oauth2_creds.Credentials(token=gcloud_token)
+        creds = oauth2_creds.Credentials(token=gcloud_token)
+        _creds_cache[cache_key] = (creds, time.monotonic() + _PRINT_TOKEN_TTL_SECONDS)
+        return creds
 
     # 4. ADC — Workload Identity in prod, application-default in dev
     try:
         creds, _ = google.auth.default(scopes=scopes)
         logger.info("get_gcp_credentials: using Application Default Credentials")
+        _creds_cache[cache_key] = (creds, None)
         return creds
     except Exception as e:
         logger.warning("get_gcp_credentials: ADC failed: %s", e)
