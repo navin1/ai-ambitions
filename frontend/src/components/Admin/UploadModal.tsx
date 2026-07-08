@@ -15,11 +15,12 @@ const FILENAME_HINT = 'AI_Ambitions_FY<YY>_<Period>_<YYYYMMDD>.xlsx (e.g. AI_Amb
 
 export function UploadModal({ onClose }: Props) {
   const [file, setFile] = useState<File | null>(null)
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle')
   const [requestError, setRequestError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
 
   const filenameError = file && !FILENAME_PATTERN.test(file.name) ? `File name must match ${FILENAME_HINT}` : null
+  const isBusy = status === 'uploading' || status === 'processing'
 
   async function handleUpload() {
     if (!file || filenameError) return
@@ -27,7 +28,9 @@ export function UploadModal({ onClose }: Props) {
     setRequestError('')
     setResult(null)
     try {
-      const res = await uploadFile(file)
+      const res = await uploadFile(file, (percent) => {
+        if (percent >= 100) setStatus('processing')
+      })
       setResult(res)
       setStatus(res.success ? 'success' : 'error')
     } catch (err) {
@@ -35,6 +38,15 @@ export function UploadModal({ onClose }: Props) {
       setRequestError(detail || 'Upload failed.')
       setStatus('error')
     }
+  }
+
+  function handleFileChange(newFile: File | null) {
+    setFile(newFile)
+    // Picking a file after a failed attempt starts a fresh attempt — clears
+    // the disabled/error state so Upload becomes clickable again.
+    setStatus('idle')
+    setResult(null)
+    setRequestError('')
   }
 
   const hasRowErrors = status === 'error' && (result?.errors.length ?? 0) > 0
@@ -95,8 +107,8 @@ export function UploadModal({ onClose }: Props) {
               <input
                 type="file"
                 className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                disabled={status === 'uploading'}
+                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                disabled={isBusy}
               />
             </label>
 
@@ -129,11 +141,17 @@ export function UploadModal({ onClose }: Props) {
 
             <button
               onClick={handleUpload}
-              disabled={!file || !!filenameError || status === 'uploading'}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-red-300 text-white text-sm font-semibold py-2.5 transition mt-4"
+              disabled={!file || !!filenameError || isBusy || status === 'error'}
+              className={`w-full flex items-center justify-center gap-2 rounded-lg text-white text-sm font-semibold py-2.5 transition mt-4 ${
+                status === 'processing'
+                  ? 'bg-blue-600 disabled:bg-blue-400'
+                  : status === 'error'
+                    ? 'bg-gray-300 disabled:bg-gray-300'
+                    : 'bg-red-600 hover:bg-red-500 disabled:bg-red-300'
+              }`}
             >
-              {status === 'uploading' ? <Loader2 size={16} className="animate-spin" /> : null}
-              {status === 'uploading' ? 'Uploading…' : 'Upload'}
+              {isBusy ? <Loader2 size={16} className="animate-spin" /> : null}
+              {status === 'uploading' ? 'Uploading…' : status === 'processing' ? 'Processing…' : 'Upload'}
             </button>
           </>
         )}

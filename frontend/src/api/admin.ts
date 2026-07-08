@@ -18,11 +18,16 @@ export interface ImportResult {
   warning?: string | null
 }
 
-export async function uploadFile(file: File): Promise<ImportResult> {
+export async function uploadFile(file: File, onUploadProgress?: (percent: number) => void): Promise<ImportResult> {
   const form = new FormData()
   form.append('file', file)
   const { data } = await client.post<ImportResult>('/admin/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (evt) => {
+      if (onUploadProgress && evt.total) {
+        onUploadProgress(Math.round((evt.loaded / evt.total) * 100))
+      }
+    },
   })
   return data
 }
