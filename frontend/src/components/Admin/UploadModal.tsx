@@ -135,7 +135,12 @@ export function UploadModal({ onClose }: Props) {
                     Nothing was loaded to BigQuery.
                   </span>
                 </div>
-                <DataTable data={result.errors as unknown as Record<string, unknown>[]} maxRows={200} />
+                <DataTable
+                  data={result.errors as unknown as Record<string, unknown>[]}
+                  maxRows={200}
+                  pageSize={200}
+                  scrollClassName="max-h-[210px]"
+                />
               </div>
             )}
 

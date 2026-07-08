@@ -43,22 +43,37 @@ async def get_summary(period: str = Query(default="YTD"), fiscal_year: Optional[
 
 
 @router.get("/periods")
-async def get_periods():
-    """Returns the list of available periods (static for now)."""
-    return ["YTD", "Q1", "Q2", "Q3", "Q4"]
+async def get_periods(fiscal_year: Optional[int] = Query(default=None)):
+    """Returns the periods that have data for the given fiscal year (defaults
+    to the latest year present in BigQuery when omitted)."""
+    try:
+        creds = get_bq_credentials()
+        periods = bigquery_client.fetch_available_periods(fiscal_year, creds)
+        return {"periods": periods}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Failed to fetch available periods for fiscal_year=%s", fiscal_year)
+        raise HTTPException(status_code=500, detail=f"BigQuery error: {exc}")
 
 
 @router.get("/years")
 async def get_years():
-    """Returns the distinct fiscal years present in BigQuery, newest first.
+    """Returns the distinct fiscal years present in BigQuery (newest first)
+    plus which periods have data for each — one query, one round trip, so the
+    frontend can gate the period tabs for any year without re-fetching on
+    every year switch.
 
     The frontend only shows the fiscal-year dropdown when this returns more
     than one year — until then there's nothing to switch between.
     """
     try:
         creds = get_bq_credentials()
-        years = bigquery_client.fetch_available_years(creds)
-        return {"years": years}
+        years, periods_by_year = bigquery_client.fetch_years_and_periods(creds)
+        return {
+            "years": years,
+            "periodsByYear": {str(y): periods_by_year[y] for y in years},
+        }
     except Exception as exc:
         logger.exception("Failed to fetch available fiscal years")
         raise HTTPException(status_code=500, detail=f"BigQuery error: {exc}")

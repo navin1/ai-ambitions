@@ -36,7 +36,7 @@ export async function fetchOverviewSummary(period: string, fiscalYear?: number):
   return data
 }
 
-export async function fetchAvailableYears(): Promise<{ years: number[] }> {
-  const { data } = await client.get<{ years: number[] }>('/overview/years')
+export async function fetchAvailableYears(): Promise<{ years: number[]; periodsByYear: Record<string, string[]> }> {
+  const { data } = await client.get<{ years: number[]; periodsByYear: Record<string, string[]> }>('/overview/years')
   return data
 }

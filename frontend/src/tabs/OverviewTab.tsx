@@ -895,6 +895,19 @@ export function OverviewTab() {
   // picks one from the dropdown — avoids an extra fetch on initial load.
   const displayYear = selectedYear ?? data?.fiscalYear
 
+  // Sourced from the same /years response (periodsByYear) rather than a
+  // separate per-year request — one round trip covers every year's tabs.
+  const availablePeriods = (displayYear !== undefined ? yearsResp?.periodsByYear?.[String(displayYear)] : undefined) ?? ['YTD']
+
+  // If the selected period has no data for the newly-selected fiscal year
+  // (e.g. switching to a year with only YTD loaded while on Q1), fall back
+  // to YTD, or the first period that does have data.
+  useEffect(() => {
+    if (availablePeriods.length > 0 && !availablePeriods.includes(period)) {
+      setPeriod((availablePeriods.includes('YTD') ? 'YTD' : availablePeriods[0]) as Period)
+    }
+  }, [availablePeriods, period])
+
   const tileVals     = data?.kpis
   const drill        = data?.investment
   const kpiBreakdown = data?.kpiBreakdown
@@ -1096,37 +1109,42 @@ export function OverviewTab() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full -mx-1 px-1 sm:mx-0 sm:px-0">
+        <div className="flex items-center gap-2 max-w-full">
+          {/* Kept outside the overflow-x-auto group below — its dropdown is
+              position:absolute and would be clipped by that ancestor's
+              overflow (overflow-x:auto implicitly clips overflow-y too). */}
           <YearPicker years={years} value={displayYear} onChange={setSelectedYear} />
-          <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm shrink-0">
-            {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
-              const isDisabled = p !== 'YTD'
-              return (
-                <button
-                  key={p} onClick={() => setPeriod(p)} disabled={isDisabled}
-                  className={clsx(
-                    'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide transition-all whitespace-nowrap',
-                    isDisabled ? 'text-gray-300 cursor-not-allowed'
-                      : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
-                  )}
-                >{p}</button>
-              )
-            })}
+          <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
+            <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm shrink-0">
+              {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
+                const isDisabled = !availablePeriods.includes(p)
+                return (
+                  <button
+                    key={p} onClick={() => setPeriod(p)} disabled={isDisabled}
+                    className={clsx(
+                      'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide transition-all whitespace-nowrap',
+                      isDisabled ? 'text-gray-300 cursor-not-allowed'
+                        : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
+                    )}
+                  >{p}</button>
+                )
+              })}
+            </div>
+            <button
+              onClick={() => setVsPlan(v => !v)}
+              className={clsx(
+                'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap',
+                vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300',
+              )}
+            >VS PLAN</button>
+            <button
+              onClick={handleExport} disabled={exporting || !data}
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gray-900 text-white text-xs font-bold tracking-wide rounded-xl hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
+            >
+              <Download size={13} />
+              {exporting ? 'EXPORTING…' : 'EXPORT'}
+            </button>
           </div>
-          <button
-            onClick={() => setVsPlan(v => !v)}
-            className={clsx(
-              'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap',
-              vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300',
-            )}
-          >VS PLAN</button>
-          <button
-            onClick={handleExport} disabled={exporting || !data}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-gray-900 text-white text-xs font-bold tracking-wide rounded-xl hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
-          >
-            <Download size={13} />
-            {exporting ? 'EXPORTING…' : 'EXPORT'}
-          </button>
         </div>
       </div>
 

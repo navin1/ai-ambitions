@@ -20,6 +20,7 @@ JOB_PROJECT   = (
 )
 
 VALID_PERIODS = {"YTD", "Q1", "Q2", "Q3", "Q4"}
+PERIOD_ORDER = ["YTD", "Q1", "Q2", "Q3", "Q4"]
 
 # ── KPI metadata (mirrors TILE_META in frontend OverviewTab.tsx) ──────────────
 # range_min/max: the full scale of the range bar
@@ -335,6 +336,36 @@ def _resolve_fiscal_year(fiscal_year: Optional[int], creds) -> int:
     if not years:
         raise ValueError("No fiscal_year data found in ai_amb_kpi_summary")
     return years[0]  # newest, since fetch_available_years orders DESC
+
+
+def fetch_available_periods(fiscal_year: Optional[int], creds) -> list[str]:
+    """Periods with data for the given fiscal year (defaults to the latest
+    year when omitted), in canonical order (YTD, Q1..Q4)."""
+    fiscal_year = _resolve_fiscal_year(fiscal_year, creds)
+    sql = f"""
+        SELECT DISTINCT period FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_summary`
+        WHERE fiscal_year = {int(fiscal_year)}
+    """
+    rows = _run_raw(sql, creds)
+    found = {r["period"] for r in rows}
+    return [p for p in PERIOD_ORDER if p in found]
+
+
+def fetch_years_and_periods(creds) -> tuple[list[int], dict[int, list[str]]]:
+    """Single-query variant of fetch_available_years + fetch_available_periods
+    (one per year) — used by /api/overview/years so the frontend can gate the
+    period tabs for every year without a separate round trip per year switch."""
+    sql = f"""
+        SELECT DISTINCT fiscal_year, period FROM `{PROJECT_ID}.{DATASET}.ai_amb_kpi_summary`
+        ORDER BY fiscal_year DESC
+    """
+    rows = _run_raw(sql, creds)
+    periods_by_year: dict[int, set[str]] = {}
+    for r in rows:
+        periods_by_year.setdefault(int(r["fiscal_year"]), set()).add(r["period"])
+    ordered = {fy: [p for p in PERIOD_ORDER if p in periods] for fy, periods in periods_by_year.items()}
+    years = sorted(ordered.keys(), reverse=True)
+    return years, ordered
 
 
 def fetch_kpi_summary(period: str, fiscal_year: int, creds) -> list[dict]:

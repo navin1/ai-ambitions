@@ -24,13 +24,14 @@ function fmtCell(val: unknown, key: string): string {
 interface Props {
   data: Record<string, unknown>[]
   maxRows?: number
+  pageSize?: number
+  scrollClassName?: string
 }
 
-export function DataTable({ data, maxRows = 100 }: Props) {
+export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName = '' }: Props) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(0)
-  const pageSize = 20
 
   if (!data.length) return <p className="text-sm text-gray-400 text-center py-8">No data</p>
 
@@ -57,10 +58,10 @@ export function DataTable({ data, maxRows = 100 }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-auto rounded border border-gray-200">
+      <div className={`overflow-auto rounded border border-gray-200 ${scrollClassName}`}>
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
               {headers.map((h) => (
                 <th
                   key={h}
