@@ -51,14 +51,6 @@ app.include_router(admin_routes.router)
 _logger = logging.getLogger("main")
 
 
-@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
-async def favicon():
-    return FileResponse(
-        str(Path(__file__).parent / "assets" / "star.png"),
-        media_type="image/png",
-    )
-
-
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     _logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
