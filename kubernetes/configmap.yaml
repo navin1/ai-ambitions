@@ -28,14 +28,16 @@ data:
   # ── AD-group-based roles ──────────────────────────────────────────────────────
   # FORGEROCK_AM_GROUPS_ATTRIBUTE is the AM session property holding AD group
   # membership (used by the app when it looks up AM sessions itself — see
-  # backend/auth.py::am_session_info). FORGEROCK_ADMIN_GROUP is the AD group
-  # name that grants the "admin" role. FORGEROCK_ACCESS_GROUP, if set, is
-  # required just to reach the app at all (admins always pass regardless).
-  # Fill in once the corresponding AD group(s) exist — until then every
-  # authenticated user resolves to the "user" role and access is unrestricted.
+  # backend/auth.py::am_session_info). FORGEROCK_ADMIN_GROUP is the single AD
+  # group name that grants the "admin" role. FORGEROCK_ACCESS_GROUP, if set, is
+  # required just to reach the app at all (admins always pass regardless) —
+  # accepts a comma-separated list of AD group names; membership in ANY one of
+  # them grants access. Fill in once the corresponding AD group(s) exist —
+  # until then every authenticated user resolves to the "user" role and access
+  # is unrestricted.
   FORGEROCK_AM_GROUPS_ATTRIBUTE: "memberOf"
   FORGEROCK_ADMIN_GROUP: ""                  # e.g. "AI-Ambitions-Admins"
-  FORGEROCK_ACCESS_GROUP: ""                 # e.g. "AI-Ambitions-Users"
+  FORGEROCK_ACCESS_GROUP: ""                 # e.g. "AI-Ambitions-Users,AI-Ambitions-Contractors"
 
   # ── Admin file upload / BigQuery load (GCS) ───────────────────────────────────
   # Bucket the /api/admin/upload endpoint (admin role only) writes to and reads

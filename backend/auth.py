@@ -40,15 +40,17 @@ DEV_SESSION_COOKIE = "dev_session"
 # same mechanism as uid/mail. IG injects it as a header (comma-separated, since
 # HTTP headers are flat strings) alongside the identity headers above; /api/me
 # reads it straight from AM session info since that route bypasses IG's filter.
-# FORGEROCK_ADMIN_GROUP is the AD group name that grants the "admin" role —
-# leave empty until the group actually exists (everyone resolves to "user").
-# FORGEROCK_ACCESS_GROUP, if set, is required just to reach the app at all
-# (admins are always let through even if not separately listed in it) — leave
-# empty to keep today's behavior of "any authenticated user can view".
+# FORGEROCK_ADMIN_GROUP is the single AD group name that grants the "admin"
+# role — leave empty until the group actually exists (everyone resolves to
+# "user"). FORGEROCK_ACCESS_GROUP, if set, is required just to reach the app
+# at all (admins are always let through even if not separately listed in it)
+# — leave empty to keep today's behavior of "any authenticated user can view".
+# Unlike FORGEROCK_ADMIN_GROUP, FORGEROCK_ACCESS_GROUP accepts a comma-separated
+# list — a user in ANY one of the listed groups is granted access.
 FORGEROCK_GROUPS_HEADER = os.getenv("FORGEROCK_GROUPS_HEADER", "x-fr-groups")
 FORGEROCK_AM_GROUPS_ATTRIBUTE = os.getenv("FORGEROCK_AM_GROUPS_ATTRIBUTE", "memberOf")
 FORGEROCK_ADMIN_GROUP = os.getenv("FORGEROCK_ADMIN_GROUP", "")
-FORGEROCK_ACCESS_GROUP = os.getenv("FORGEROCK_ACCESS_GROUP", "")
+FORGEROCK_ACCESS_GROUPS = {g.strip() for g in os.getenv("FORGEROCK_ACCESS_GROUP", "").split(",") if g.strip()}
 
 
 def _parse_groups_header(raw: str) -> list[str]:
@@ -68,11 +70,11 @@ def _resolve_role(groups: list[str]) -> str:
 
 def _check_access_group(user: dict) -> None:
     """Raises 403 if FORGEROCK_ACCESS_GROUP is configured and the user isn't in
-    it — admins always pass. No-op when FORGEROCK_ACCESS_GROUP is unset."""
-    if FORGEROCK_ACCESS_GROUP and user["role"] != "admin" and FORGEROCK_ACCESS_GROUP not in user["groups"]:
+    any of the listed groups — admins always pass. No-op when unset."""
+    if FORGEROCK_ACCESS_GROUPS and user["role"] != "admin" and FORGEROCK_ACCESS_GROUPS.isdisjoint(user["groups"]):
         logger.warning(
-            "access denied: user=%s not in required access group '%s' (groups=%s)",
-            user["id"], FORGEROCK_ACCESS_GROUP, user["groups"],
+            "access denied: user=%s not in any required access group %s (groups=%s)",
+            user["id"], sorted(FORGEROCK_ACCESS_GROUPS), user["groups"],
         )
         raise HTTPException(status_code=403, detail="Not authorized to access this application")
 
