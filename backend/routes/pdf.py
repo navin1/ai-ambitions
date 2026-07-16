@@ -170,7 +170,7 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             opts['scales']['y']['ticks'] = {'font': {'size': 7}, 'autoSkip': False}
             opts['layout'] = {'padding': {'right': 38}}
             val_unit = (y_axis[0] if y_axis else '').strip()
-            label_fmt = 'dollar' if val_unit == '$M' else ('pts' if val_unit == 'pts' else 'pct')
+            label_fmt = 'dollar' if val_unit == 'Amount' else ('pts' if val_unit == 'pts' else 'pct')
             opts['plugins']['datalabels'] = {
                 'anchor': 'end', 'align': 'end', 'offset': 4,
                 'font': {'size': 6.5, 'weight': '700'}, 'color': '#374151', 'clip': False,
@@ -284,7 +284,9 @@ def _build_table_html(data: list, max_rows: int = 20, actual_col: str = '', plan
                 continue
             hk = h.lower().strip()
             if isinstance(v, (int, float)) and not isinstance(v, bool):
-                if hk == '$m' or ' $m' in hk or '($m)' in hk:
+                if hk.endswith('($)'):
+                    v = f"${v:,.0f}"
+                elif hk == '$m' or ' $m' in hk or '($m)' in hk:
                     v = f"${v:.1f}M"
                 elif hk == '%' or hk.endswith(' %') or '(%)' in hk:
                     v = f"{v:.1f}%"
@@ -404,9 +406,17 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     if (a < 10)          return p + parseFloat(v.toFixed(1));
     return p + Math.round(v).toLocaleString();
   }}
+  // Dedicated money formatter: real-magnitude K/M partitioning, always 2 decimals
+  // (distinct from numFmt above, which non-money axes still use unchanged).
+  function fmtMoneyAuto(v) {{
+    var a = Math.abs(v);
+    if (a >= 1e6) return '$' + (v/1e6).toFixed(2) + 'M';
+    if (a >= 1e3) return '$' + (v/1e3).toFixed(2) + 'K';
+    return '$' + v.toFixed(2);
+  }}
   function fmtLabel(v, fmt) {{
     v = parseFloat(v);
-    if (fmt === 'dollar') return '$' + v.toFixed(1) + 'M';
+    if (fmt === 'dollar') return fmtMoneyAuto(v);
     if (fmt === 'pts')    return v.toFixed(2) + ' pts';
     return v.toFixed(1) + '%';
   }}
@@ -420,7 +430,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     var isHoriz = (item.config.options || {{}}).indexAxis === 'y';
     var valAxis = isHoriz ? scales.x : scales.y;
     if (valAxis) valAxis.ticks = Object.assign(valAxis.ticks || {{}}, {{
-      callback: function(v) {{ return numFmt(v, false); }}
+      callback: function(v) {{ return money ? fmtMoneyAuto(v) : numFmt(v, false); }}
     }});
     if (scales.y1) scales.y1.ticks = Object.assign(scales.y1.ticks || {{}}, {{
       callback: function(v) {{ return numFmt(v, false); }}

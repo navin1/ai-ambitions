@@ -21,6 +21,17 @@ function fmtCell(val: unknown, key: string): string {
     : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function exactCell(val: unknown, key: string): string | undefined {
+  if (typeof val !== 'number') return undefined
+  const k = key.toLowerCase()
+  if (MONEY_COL.test(k) && !COUNT_COL.test(k)) {
+    return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  return Number.isInteger(val)
+    ? val.toLocaleString()
+    : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 interface Props {
   data: Record<string, unknown>[]
   maxRows?: number
@@ -82,7 +93,11 @@ export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName 
             {visible.map((row, i) => (
               <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 {headers.map((h) => (
-                  <td key={h} className={`px-3 py-2 text-gray-700 whitespace-nowrap ${numericCols.has(h) ? 'text-right' : ''}`}>
+                  <td
+                    key={h}
+                    title={exactCell(row[h], h)}
+                    className={`px-3 py-2 text-gray-700 whitespace-nowrap ${numericCols.has(h) ? 'text-right' : ''}`}
+                  >
                     {fmtCell(row[h], h)}
                   </td>
                 ))}

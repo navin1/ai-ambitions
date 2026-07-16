@@ -79,11 +79,11 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
           <div className="absolute top-1/2 -translate-y-1/2 w-px h-5 bg-amber-400" style={{ left: planL }} />
         </div>
         <div className="relative flex justify-between mt-2">
-          <span className="text-[13px] text-gray-400">$0M</span>
+          <span className="text-[13px] text-gray-400">{fmtDollarsAuto(rangeMin, 0)}</span>
           <span className="absolute text-[13px] font-semibold text-amber-600 -translate-x-1/2 whitespace-nowrap" style={{ left: planL }}>
-            plan ${budget}M
+            plan {fmtDollarsAuto(budget, 0)}
           </span>
-          <span className="text-[13px] text-gray-400">${rangeMax}M</span>
+          <span className="text-[13px] text-gray-400">{fmtDollarsAuto(rangeMax, 0)}</span>
         </div>
       </div>
     )
@@ -212,10 +212,44 @@ function KpiCardSkeleton() {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+// v is in millions (e.g. 12.34 == $12.34M) — auto-scale so small amounts
+// (e.g. 0.0015 == $1,500) don't round away to "$0.00M"
+function fmtDollarsAuto(v: number, decimals = 2): string {
+  const abs = Math.abs(v)
+  if (abs >= 1)     return `$${v.toFixed(decimals)}M`
+  if (abs >= 0.001) return `$${(v * 1_000).toFixed(decimals)}K`
+  return `$${(v * 1_000_000).toFixed(decimals)}`
+}
+
 function fmtVal(v: number, unit: string): string {
-  if (unit === '$M')  return `$${v.toFixed(2)}M`
+  if (unit === '$M')  return fmtDollarsAuto(v)
   if (unit === 'pts') return `${v.toFixed(2)} pts`
   return `${v.toFixed(2)}%`
+}
+
+// v is in millions (e.g. 12.34 == $12.34M) — expand to the exact whole-dollar figure for tooltips
+function exactDollar(v: number): string {
+  return `$${Math.round(v * 1_000_000).toLocaleString()}`
+}
+
+// Instant hover tooltip for exact amounts — avoids the OS-level delay of the native `title` attribute
+function AmountTip({ display, exact, className }: { display: string; exact?: string; className?: string }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <span
+      className={clsx('relative inline-block', className)}
+      onMouseEnter={() => exact && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {display}
+      {hover && exact && (
+        <span className="pointer-events-none absolute top-full right-0 z-50 mt-1.5 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-semibold text-white shadow-lg">
+          <span className="absolute bottom-full right-2 h-0 w-0 border-4 border-transparent border-b-gray-900" />
+          {exact}
+        </span>
+      )}
+    </span>
+  )
 }
 
 
@@ -474,7 +508,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
     function fmtDisplayVal(uc: typeof items[number]) {
       if (selectedKpi === 'revenue') {
         const v = uc.dollarValue ?? uc.value * 20
-        return `$${v.toFixed(1)}M`
+        return fmtDollarsAuto(v)
       }
       if (selectedKpi === 'nps') return `${uc.value.toFixed(2)} pts`
       return `${uc.value.toFixed(1)}%`
@@ -482,7 +516,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
     function fmtDisplayPlan(uc: typeof items[number]) {
       if (selectedKpi === 'revenue') {
         const p = uc.dollarPlan ?? (uc.plan != null ? uc.plan * 20 : null)
-        return p != null ? `$${p.toFixed(1)}M` : '—'
+        return p != null ? fmtDollarsAuto(p) : '—'
       }
       if (selectedKpi === 'nps') return `${(uc.plan ?? 0).toFixed(2)} pts`
       return `${(uc.plan ?? 0).toFixed(1)}%`
@@ -510,7 +544,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
             <SortIcon sortState={sort} colKey="functionalArea" />
           </div>
           <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('value')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">{selectedKpi === 'revenue' ? '$M' : selectedKpi === 'nps' ? 'pts' : '%'}</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400">{selectedKpi === 'revenue' ? 'Actual' : selectedKpi === 'nps' ? 'pts' : '%'}</span>
             <SortIcon sortState={sort} colKey="value" />
           </div>
           {vsPlan && (
@@ -562,15 +596,21 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                   <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
                     <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                   </div>
-                  <span className={clsx('text-sm font-black tabular-nums shrink-0',
-                    vsPlan && uc.plan != null
-                      ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
-                      : 'text-gray-900'
-                  )}>{fmtDisplayVal(uc)}</span>
+                  <AmountTip
+                    display={fmtDisplayVal(uc)}
+                    exact={selectedKpi === 'revenue' ? exactDollar(uc.dollarValue ?? uc.value * 20) : undefined}
+                    className={clsx('text-sm font-black tabular-nums shrink-0',
+                      vsPlan && uc.plan != null
+                        ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
+                        : 'text-gray-900'
+                    )}
+                  />
                   {vsPlan && (
-                    <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
-                      {uc.plan != null ? fmtDisplayPlan(uc) : '—'}
-                    </span>
+                    <AmountTip
+                      display={uc.plan != null ? fmtDisplayPlan(uc) : '—'}
+                      exact={selectedKpi === 'revenue' && uc.plan != null ? exactDollar(uc.dollarPlan ?? uc.plan * 20) : undefined}
+                      className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                    />
                   )}
                 </div>
                 <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -641,7 +681,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
           <SortIcon sortState={sort} colKey="functionalArea" />
         </div>
         <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('amount')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">$M</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400">Actual</span>
           <SortIcon sortState={sort} colKey="amount" />
         </div>
         {vsPlan && (
@@ -692,15 +732,21 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                 <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
                   <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                 </div>
-                <span className={clsx('text-sm font-black tabular-nums shrink-0',
-                  vsPlan && uc.plan != null
-                    ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
-                    : 'text-gray-900'
-                )}>{fmtVal(uc.amount, '$M')}</span>
+                <AmountTip
+                  display={fmtVal(uc.amount, '$M')}
+                  exact={exactDollar(uc.amount)}
+                  className={clsx('text-sm font-black tabular-nums shrink-0',
+                    vsPlan && uc.plan != null
+                      ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
+                      : 'text-gray-900'
+                  )}
+                />
                 {vsPlan && (
-                  <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
-                    {uc.plan != null ? fmtVal(uc.plan, '$M') : '—'}
-                  </span>
+                  <AmountTip
+                    display={uc.plan != null ? fmtVal(uc.plan, '$M') : '—'}
+                    exact={uc.plan != null ? exactDollar(uc.plan) : undefined}
+                    className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                  />
                 )}
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -786,7 +832,8 @@ function SummaryWidget({
   }
 
   function fmtVal(v: number): string {
-    if (isSpend || selectedKpi === 'revenue') return `$${v.toFixed(1)}M`
+    if (isSpend)                      return fmtDollarsAuto(v)
+    if (selectedKpi === 'revenue')     return fmtDollarsAuto(v)
     if (selectedKpi === 'nps')        return `${v.toFixed(2)} pts`
     return `${v.toFixed(1)}%`
   }
@@ -838,13 +885,17 @@ function SummaryWidget({
                 <span className="text-sm font-semibold text-gray-700 flex-1 truncate min-w-0 leading-tight" title={r.name}>
                   {r.name}
                 </span>
-                <span className={clsx('text-sm font-black tabular-nums shrink-0', color)}>
-                  {fmtVal(r.actual)}
-                </span>
+                <AmountTip
+                  display={fmtVal(r.actual)}
+                  exact={isSpend || selectedKpi === 'revenue' ? exactDollar(r.actual) : undefined}
+                  className={clsx('text-sm font-black tabular-nums shrink-0', color)}
+                />
                 {vsPlan && (
-                  <span className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100">
-                    {r.plan != null ? fmtVal(r.plan) : '—'}
-                  </span>
+                  <AmountTip
+                    display={r.plan != null ? fmtVal(r.plan) : '—'}
+                    exact={(isSpend || selectedKpi === 'revenue') && r.plan != null ? exactDollar(r.plan) : undefined}
+                    className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                  />
                 )}
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -1000,7 +1051,7 @@ export function OverviewTab() {
 
       const pct = kpiTotal > 0 ? Math.min(100, (sum / kpiTotal) * 100) : 0
       let rawValue = ''
-      if      (m.id === 'ai-cost')   rawValue = `$${sum.toFixed(1)}M invested`
+      if      (m.id === 'ai-cost')   rawValue = `${fmtDollarsAuto(sum, 1)} invested`
       else if (m.id === 'revenue')   rawValue = `${sum.toFixed(2)}% growth`
       else if (m.id === 'nps')       rawValue = `${sum.toFixed(2)} pts`
       else                           rawValue = `${sum.toFixed(1)}% gain`
@@ -1008,7 +1059,7 @@ export function OverviewTab() {
       result[m.id] = {
         pct,
         rawValue,
-        dollarStr: dollarSum != null && dollarSum > 0 ? `$${dollarSum.toFixed(1)}M` : undefined,
+        dollarStr: dollarSum != null && dollarSum > 0 ? fmtDollarsAuto(dollarSum, 1) : undefined,
       }
     }
     return result

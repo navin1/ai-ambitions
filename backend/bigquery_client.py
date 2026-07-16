@@ -230,6 +230,17 @@ def fetch_column_sample_values(columns: list[str], token: Optional[str] = None) 
 
 # ── Value formatting (backend mirrors frontend display logic) ─────────────────
 
+# val is in millions (e.g. 38.5 == $38.5M) — auto-scale so small amounts
+# don't round away to "$0.0M"
+def _fmt_dollars_auto(val: float, decimals: int = 1) -> str:
+    abs_val = abs(val)
+    if abs_val >= 1:
+        return f"${val:.{decimals}f}M"
+    if abs_val >= 0.001:
+        return f"${val * 1_000:.{decimals}f}K"
+    return f"${val * 1_000_000:.{decimals}f}"
+
+
 def _fmt_value(kpi_id: str, val: float) -> str:
     if kpi_id == "revenue":
         return f"{val:.1f}%"
@@ -238,14 +249,14 @@ def _fmt_value(kpi_id: str, val: float) -> str:
     if kpi_id == "efficiency":
         return f"{val:.0f}%"
     if kpi_id == "ai-cost":
-        return f"${val:.1f}M"
+        return _fmt_dollars_auto(val)
     return str(val)
 
 
 def _fmt_delta(kpi_id: str, delta: float) -> str:
     if kpi_id == "ai-cost":
         sign = "−" if delta < 0 else "+"   # U+2212 minus sign
-        return f"{sign}${abs(delta):.1f}M"
+        return f"{sign}{_fmt_dollars_auto(abs(delta))}"
     sign = "+" if delta >= 0 else ""
     if kpi_id in ("revenue", "nps"):
         return f"{sign}{delta:.1f}"
@@ -279,6 +290,14 @@ def _compute_status(kpi_id: str, actual: float, plan: float, meta: dict, target_
         return "in-band", "IN BAND"
 
 
+# cost_actual/cost_plan/revenue_actual_dollars/revenue_plan_dollars are stored
+# in BigQuery as raw dollars (both the Excel upload path and seed_data.sql load
+# them that way), but the frontend renders everything in millions — convert
+# once here, at the point they leave BigQuery.
+def _dollars_to_millions(v) -> Optional[float]:
+    return float(v) / 1_000_000 if v is not None else None
+
+
 def _build_tile_val(kpi_id: str, row: dict, meta: dict) -> dict:
     actual = float(row.get("actual_value") or 0)
     plan   = float(row.get("plan_value")   or 0)
@@ -289,6 +308,16 @@ def _build_tile_val(kpi_id: str, row: dict, meta: dict) -> dict:
     range_max  = float(row["range_max"])  if row.get("range_max")  is not None else 100.0
     target_min = float(row["target_min"]) if row.get("target_min") is not None else None
     target_max = float(row["target_max"]) if row.get("target_max") is not None else None
+
+    # ai-cost's kpi_summary row is stored in raw dollars, same as the
+    # per-use-case data (unlike revenue/nps/efficiency, which are %/pts, not
+    # dollars) — scale to millions once here so every downstream consumer
+    # (status calc, formatting, tile fields) is unchanged.
+    if kpi_id == "ai-cost":
+        actual, plan, delta = actual / 1_000_000, plan / 1_000_000, delta / 1_000_000
+        range_min, range_max = range_min / 1_000_000, range_max / 1_000_000
+        if target_min is not None: target_min /= 1_000_000
+        if target_max is not None: target_max /= 1_000_000
 
     status, status_label = _compute_status(kpi_id, actual, plan, meta, target_min, target_max)
 
@@ -456,8 +485,8 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
         if dt == "category":
             by_category.append({
                 "label":  r["dimension_name"],
-                "amount": float(r["actual_amount"] or 0),
-                "plan":   float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
+                "amount": _dollars_to_millions(r["actual_amount"]) or 0,
+                "plan":   _dollars_to_millions(r.get("plan_amount")),
             })
         elif dt == "use_case":
             rank = r.get("display_rank")
@@ -465,8 +494,8 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
                 "rank":            f"{int(rank):02d}" if rank is not None else "—",
                 "name":            r["dimension_name"],
                 "kpi":             r.get("kpi_tag") or "",
-                "amount":          float(r["actual_amount"] or 0),
-                "plan":            float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
+                "amount":          _dollars_to_millions(r["actual_amount"]) or 0,
+                "plan":            _dollars_to_millions(r.get("plan_amount")),
                 "description":     r.get("description") or None,
                 "csg":             r.get("csg") or None,
                 "functionalArea":  r.get("functional_area") or None,
@@ -478,8 +507,8 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
         elif dt == "vendor":
             by_vendor.append({
                 "label":  r["dimension_name"],
-                "amount": float(r["actual_amount"] or 0),
-                "plan":   float(r["plan_amount"] or 0) if r.get("plan_amount") is not None else None,
+                "amount": _dollars_to_millions(r["actual_amount"]) or 0,
+                "plan":   _dollars_to_millions(r.get("plan_amount")),
             })
 
     # Partition kpi_breakdown rows by kpi_id and dimension_type
@@ -500,8 +529,8 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
             "rank":            f"{int(r['display_rank']):02d}" if r.get("display_rank") is not None else None,
             "currentPhase":    r.get("current_phase") or None,
             "functionalArea":  r.get("functional_area") or None,
-            "dollarValue":     float(r["revenue_actual_dollars"]) if r.get("revenue_actual_dollars") is not None else None,
-            "dollarPlan":      float(r["revenue_plan_dollars"])   if r.get("revenue_plan_dollars")   is not None else None,
+            "dollarValue":     _dollars_to_millions(r.get("revenue_actual_dollars")),
+            "dollarPlan":      _dollars_to_millions(r.get("revenue_plan_dollars")),
             "revenueNotes":    r.get("revenue_notes") or None,
             "npsNotes":        r.get("nps_notes") or None,
             "efficiencyNotes": r.get("efficiency_notes") or None,

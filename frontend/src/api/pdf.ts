@@ -26,9 +26,18 @@ function aggregateBy<T>(
     .sort((a, b) => b.actual - a.actual)
 }
 
+// rows' `actual` is in millions (e.g. 12.34 == $12.34M) — auto-scale the raw
+// dollar total so small aggregates don't round away to "$0.0M"
+function fmtDollarsAuto(rawDollars: number, decimals = 2): string {
+  const abs = Math.abs(rawDollars)
+  if (abs >= 1_000_000) return `$${(rawDollars / 1_000_000).toFixed(decimals)}M`
+  if (abs >= 1_000)     return `$${(rawDollars / 1_000).toFixed(decimals)}K`
+  return `$${rawDollars.toFixed(decimals)}`
+}
+
 function sumTotal(rows: { actual: number }[], unit: 'dollar' | 'pts' | 'pct'): string {
   const t = rows.reduce((s, r) => s + r.actual, 0)
-  if (unit === 'dollar') return `$${t.toFixed(1)}M`
+  if (unit === 'dollar') return fmtDollarsAuto(t * 1_000_000)
   if (unit === 'pts')    return `${t.toFixed(2)} pts`
   return `${t.toFixed(1)}%`
 }
@@ -38,7 +47,14 @@ function mkPanel(
   rows: { name: string; actual: number }[],
   valKey: string, barColor: string, totalStr: string,
 ) {
-  const toRow = (r: { name: string; actual: number }) => ({ [dimKey]: r.name, [valKey]: +r.actual.toFixed(2) })
+  // 'Amount' marks a dollar panel: the backend auto-scales any column whose
+  // header ends in "amount" ($ / K / M, 2 decimals) — so pass raw dollars,
+  // not the millions-scale `actual`, for those.
+  const isMoney = valKey === 'Amount'
+  const toRow = (r: { name: string; actual: number }) => ({
+    [dimKey]: r.name,
+    [valKey]: isMoney ? Math.round(r.actual * 1_000_000) : +r.actual.toFixed(2),
+  })
   return {
     title, kpi_id: kpiId,
     chart_type: 'horizontal_bar',
@@ -105,10 +121,10 @@ export async function exportOverviewPDF(
     filterSubsection = {
       title: `Filter Focus — ${filterSuffix}`,
       data: [
-        { KPI: 'Revenue Growth',  Contribution: `$${revContrib.toFixed(1)}M`,   'vs. Total': pctOf(revPct, kpis[1]?.current ?? 0) },
-        { KPI: 'NPS Improvement', Contribution: `${npsContrib.toFixed(2)} pts`, 'vs. Total': pctOf(npsContrib, kpis[2]?.current ?? 0) },
-        { KPI: 'Efficiency Gain', Contribution: `${effContrib.toFixed(1)}%`,    'vs. Total': pctOf(effContrib, kpis[3]?.current ?? 0) },
-        { KPI: 'AI Cost',         Contribution: `$${costContrib.toFixed(1)}M`,  'vs. Total': pctOf(costContrib, kpis[0]?.current ?? 0) },
+        { KPI: 'Revenue Growth',  Contribution: fmtDollarsAuto(revContrib * 1_000_000, 1),  'vs. Total': pctOf(revPct, kpis[1]?.current ?? 0) },
+        { KPI: 'NPS Improvement', Contribution: `${npsContrib.toFixed(2)} pts`,              'vs. Total': pctOf(npsContrib, kpis[2]?.current ?? 0) },
+        { KPI: 'Efficiency Gain', Contribution: `${effContrib.toFixed(1)}%`,                 'vs. Total': pctOf(effContrib, kpis[3]?.current ?? 0) },
+        { KPI: 'AI Cost',         Contribution: fmtDollarsAuto(costContrib * 1_000_000, 1),  'vs. Total': pctOf(costContrib, kpis[0]?.current ?? 0) },
       ],
     }
   }
@@ -134,8 +150,8 @@ export async function exportOverviewPDF(
       '#':         String(i + 1).padStart(2, '0'),
       'Use Case':  trunc(r.label),
       'Area':      r.functionalArea ?? '—',
-      'Actual $M': +(r.dollarValue ?? r.value * 20).toFixed(1),
-      'Plan $M':   r.plan != null ? +(r.plan * 20).toFixed(1) : null,
+      'Actual ($)': Math.round((r.dollarValue ?? r.value * 20) * 1_000_000),
+      'Plan ($)':   r.plan != null ? Math.round((r.dollarPlan ?? r.plan * 20) * 1_000_000) : null,
     }))
 
   const top25NPS = [...(kpiBreakdown?.nps.byUseCase ?? [])]
@@ -170,17 +186,17 @@ export async function exportOverviewPDF(
       '#':         String(i + 1).padStart(2, '0'),
       'Use Case':  trunc(u.name),
       'Area':      u.functionalArea ?? '—',
-      'Actual $M': +u.amount.toFixed(1),
-      'Plan $M':   u.plan != null ? +u.plan.toFixed(1) : null,
+      'Actual ($)': Math.round(u.amount * 1_000_000),
+      'Plan ($)':   u.plan != null ? Math.round(u.plan * 1_000_000) : null,
     }))
 
   // ── Build panel arrays ────────────────────────────────────────────────────────
   function makePanels(dimKey: string, rev: typeof revByFA, nps: typeof npsByFA, eff: typeof effByFA, cost: typeof costByFA) {
     return [
-      mkPanel('Revenue Growth',  'revenue',    dimKey, rev,  '$M',  '#16A34A', sumTotal(rev,  'dollar')),
-      mkPanel('NPS Improvement', 'nps',        dimKey, nps,  'pts', '#2563EB', sumTotal(nps,  'pts')),
-      mkPanel('Efficiency Gain', 'efficiency', dimKey, eff,  '%',   '#D97706', sumTotal(eff,  'pct')),
-      mkPanel('AI Cost',         'ai-cost',    dimKey, cost, '$M',  '#7C3AED', sumTotal(cost, 'dollar')),
+      mkPanel('Revenue Growth',  'revenue',    dimKey, rev,  'Amount', '#16A34A', sumTotal(rev,  'dollar')),
+      mkPanel('NPS Improvement', 'nps',        dimKey, nps,  'pts',    '#2563EB', sumTotal(nps,  'pts')),
+      mkPanel('Efficiency Gain', 'efficiency', dimKey, eff,  '%',      '#D97706', sumTotal(eff,  'pct')),
+      mkPanel('AI Cost',         'ai-cost',    dimKey, cost, 'Amount', '#7C3AED', sumTotal(cost, 'dollar')),
     ]
   }
 
@@ -218,8 +234,8 @@ export async function exportOverviewPDF(
       x_axis:      '#',
       y_axis:      [],
       max_rows:    TOP_UC,
-      actual_col:  'Actual $M',
-      plan_col:    'Plan $M',
+      actual_col:  'Actual ($)',
+      plan_col:    'Plan ($)',
     },
     {
       title:       `Top ${TOP_UC} Use Cases — NPS Improvement — ${periodLabel}${titleTag}`,
@@ -248,8 +264,8 @@ export async function exportOverviewPDF(
       x_axis:              '#',
       y_axis:              [],
       max_rows:            TOP_UC,
-      actual_col:          'Actual $M',
-      plan_col:            'Plan $M',
+      actual_col:          'Actual ($)',
+      plan_col:            'Plan ($)',
       invert_actual_color: true,
     },
   ]
