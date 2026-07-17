@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import type { ChartType } from '../../types'
 import { DataTable } from '../DataTable/DataTable'
+import { isMoneyColumn, fmtDollarsAutoRaw } from '../../utils/money'
 
 const PALETTE = [
   '#2563EB', '#16A34A', '#D97706', '#DC2626', '#7C3AED',
@@ -11,19 +12,8 @@ const PALETTE = [
   '#9333EA', '#CA8A04', '#1D4ED8', '#15803D',
 ]
 
-const MONEY_RE = /spend|dollar|amount|budget|fee|cost|ytd|capital|expense|salary/i
-const COUNT_RE = /count|ftp|fte|hc|headcount|qty|quantity|rank|row_num|num_/i
-
-function isMoney(key: string): boolean {
-  return MONEY_RE.test(key) && !COUNT_RE.test(key)
-}
-
 // Axis ticks — abbreviated (900K, 10M)
-function fmtMoney(val: number) {
-  if (Math.abs(val) >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-  if (Math.abs(val) >= 1_000) return `$${(val / 1_000).toFixed(2)}K`
-  return `$${val.toFixed(2)}`
-}
+const fmtMoney = fmtDollarsAutoRaw
 
 function fmtCount(val: number) {
   const abs = Math.abs(val)
@@ -44,7 +34,7 @@ function fmtCountFull(val: number) {
 }
 
 function makeAxisFmt(keys: string[]): (val: unknown) => string {
-  const money = keys.some((k) => isMoney(k))
+  const money = keys.some((k) => isMoneyColumn(k))
   return (val) => {
     if (typeof val !== 'number') return String(val ?? '')
     return money ? fmtMoney(val) : fmtCount(val)
@@ -53,7 +43,7 @@ function makeAxisFmt(keys: string[]): (val: unknown) => string {
 
 function tooltipFmt(v: number, name: unknown): string {
   const key = String(name ?? '')
-  return isMoney(key) ? fmtMoneyFull(v) : fmtCountFull(v)
+  return isMoneyColumn(key) ? fmtMoneyFull(v) : fmtCountFull(v)
 }
 
 interface Props {
@@ -108,7 +98,7 @@ export function ChartRenderer({ chart_type, data, x_axis, y_axis, color_field, s
       <div className="flex flex-wrap gap-4 py-4 justify-center">
         {Object.entries(row).map(([k, v]) => {
           const formatted = typeof v === 'number'
-            ? (isMoney(k) ? fmtMoneyFull(v) : fmtCountFull(v))
+            ? (isMoneyColumn(k) ? fmtMoneyFull(v) : fmtCountFull(v))
             : String(v)
           return (
             <div key={k} className="text-center">
@@ -156,7 +146,7 @@ export function ChartRenderer({ chart_type, data, x_axis, y_axis, color_field, s
               <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(v: number) => isMoney(valKey) ? fmtMoneyFull(v) : fmtCountFull(v)} contentStyle={{ fontSize: '10px' }} />
+          <Tooltip formatter={(v: number) => isMoneyColumn(valKey) ? fmtMoneyFull(v) : fmtCountFull(v)} contentStyle={{ fontSize: '10px' }} />
           <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '12px' }} />
         </PieChart>
       </ResponsiveContainer>

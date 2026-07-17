@@ -1,5 +1,6 @@
 import os
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +26,15 @@ logging.getLogger("main").info(
     f"ForgeRock AM ({auth.FORGEROCK_AM_URL})" if auth.FORGEROCK_AM_URL else "dev-fallback (FORGEROCK_AM_URL not set)",
 )
 
-app = FastAPI(title="AI Ambitions Dashboard", version="1.0.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    yield
+    # The PDF export route keeps one headless-browser instance alive across
+    # requests (see routes/pdf.py) — close it on shutdown so it doesn't leak.
+    await pdf.close_browser()
+
+
+app = FastAPI(title="AI Ambitions Dashboard", version="1.0.0", lifespan=_lifespan)
 
 # CORS — dev only; in prod all traffic goes through the GKE Ingress / ForgeRock IG
 _cors_origins = ["http://localhost:5173", "http://localhost:3000"]

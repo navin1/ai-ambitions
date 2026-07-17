@@ -3,13 +3,49 @@ import re
 import base64
 import tempfile
 import os
+import asyncio
+import logging
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
+from playwright.async_api import async_playwright, Browser
 from schemas import PDFRequest
 
+logger = logging.getLogger(__name__)
+
 _ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets')
+
+# ── Shared browser instance ───────────────────────────────────────────────────
+# Launching headless Chromium is expensive (hundreds of ms to ~2s) — reuse one
+# instance across requests instead of paying that cost on every export. Each
+# request still gets its own page (see _render_html), so this is safe for
+# concurrent exports. Lazily started on first use, closed on app shutdown via
+# close_browser() (see main.py's lifespan).
+_playwright = None
+_browser: Browser | None = None
+_browser_lock = asyncio.Lock()
+
+
+async def _get_browser() -> Browser:
+    global _playwright, _browser
+    async with _browser_lock:
+        if _browser is None or not _browser.is_connected():
+            if _playwright is None:
+                _playwright = await async_playwright().start()
+            logger.info("Launching shared PDF-export browser instance")
+            _browser = await _playwright.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
+        return _browser
+
+
+async def close_browser() -> None:
+    global _playwright, _browser
+    if _browser is not None:
+        await _browser.close()
+        _browser = None
+    if _playwright is not None:
+        await _playwright.stop()
+        _playwright = None
 
 # ── Margin constants ─────────────────────────────────────────────────────────
 # Change ONLY these two values to control body/header gap on every content page.
@@ -170,7 +206,7 @@ def _build_chartjs_config(widget: dict) -> dict | None:
             opts['scales']['y']['ticks'] = {'font': {'size': 7}, 'autoSkip': False}
             opts['layout'] = {'padding': {'right': 38}}
             val_unit = (y_axis[0] if y_axis else '').strip()
-            label_fmt = 'dollar' if val_unit == 'Amount' else ('pts' if val_unit == 'pts' else 'pct')
+            label_fmt = 'dollar' if is_money else ('pts' if val_unit == 'pts' else 'pct')
             opts['plugins']['datalabels'] = {
                 'anchor': 'end', 'align': 'end', 'offset': 4,
                 'font': {'size': 6.5, 'weight': '700'}, 'color': '#374151', 'clip': False,
@@ -305,7 +341,7 @@ def _build_table_html(data: list, max_rows: int = 20, actual_col: str = '', plan
     return f'<div class="data-table"><table><thead><tr>{heads}</tr></thead><tbody>{body}</tbody></table>{note}</div>'
 
 
-def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, include_cover: bool = True) -> str:
+def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, include_cover: bool = True) -> tuple[str, bool]:
     chart_configs: list[dict] = []
     sections = ''
 
@@ -397,14 +433,14 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
   if (typeof Chart === 'undefined') {{ window.chartsReady = true; return; }}
   if (typeof ChartDataLabels !== 'undefined') {{ Chart.register(ChartDataLabels); }}
   Chart.defaults.font.family = "Inter, Segoe UI, Arial, sans-serif";
-  function numFmt(v, money) {{
-    var a = Math.abs(v), p = money ? '$' : '';
-    if (a >= 1e9) return p + (v/1e9).toFixed(1) + 'B';
-    if (a >= 1e6) return p + (v/1e6).toFixed(1) + 'M';
-    if (a >= 1e3) return p + Math.round(v/1e3) + 'K';
-    if (a > 0 && a < 1)  return p + parseFloat(v.toFixed(2));
-    if (a < 10)          return p + parseFloat(v.toFixed(1));
-    return p + Math.round(v).toLocaleString();
+  function numFmt(v) {{
+    var a = Math.abs(v);
+    if (a >= 1e9) return (v/1e9).toFixed(1) + 'B';
+    if (a >= 1e6) return (v/1e6).toFixed(1) + 'M';
+    if (a >= 1e3) return Math.round(v/1e3) + 'K';
+    if (a > 0 && a < 1)  return parseFloat(v.toFixed(2));
+    if (a < 10)          return parseFloat(v.toFixed(1));
+    return Math.round(v).toLocaleString();
   }}
   // Dedicated money formatter: real-magnitude K/M partitioning, always 2 decimals
   // (distinct from numFmt above, which non-money axes still use unchanged).
@@ -430,10 +466,10 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
     var isHoriz = (item.config.options || {{}}).indexAxis === 'y';
     var valAxis = isHoriz ? scales.x : scales.y;
     if (valAxis) valAxis.ticks = Object.assign(valAxis.ticks || {{}}, {{
-      callback: function(v) {{ return money ? fmtMoneyAuto(v) : numFmt(v, false); }}
+      callback: function(v) {{ return money ? fmtMoneyAuto(v) : numFmt(v); }}
     }});
     if (scales.y1) scales.y1.ticks = Object.assign(scales.y1.ticks || {{}}, {{
-      callback: function(v) {{ return numFmt(v, false); }}
+      callback: function(v) {{ return numFmt(v); }}
     }});
     if (isHoriz && labelFmt) {{
       var dl = ((item.config.options || {{}}).plugins || {{}}).datalabels;
@@ -466,7 +502,7 @@ def _build_html(title: str, tab_name: str, widgets: list[dict], date_str: str, i
   <div class="cover-foot">Confidential</div>
 </div>''' if include_cover else ''
 
-    return f'''<!DOCTYPE html>
+    html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -566,6 +602,7 @@ tr:nth-child(even) td {{ background:#F8FAFC; }}
 {charts_js}
 </body>
 </html>'''
+    return html, bool(chart_configs)
 
 
 async def _render_html(browser, html: str, has_charts: bool, dest: str, header_footer: bool) -> None:
@@ -596,17 +633,12 @@ async def _render_html(browser, html: str, has_charts: bool, dest: str, header_f
 @router.post("/export")
 async def export_pdf(req: PDFRequest):
     from datetime import date
-    from playwright.async_api import async_playwright
     from pypdf import PdfWriter, PdfReader
 
     date_str = date.today().strftime("%B %d, %Y")
-    has_charts = any(
-        _build_chartjs_config(w) or any(_build_chartjs_config(p) for p in w.get('panels', []))
-        for w in req.widgets
-    )
 
-    cover_html   = _build_html(req.title, req.tab_name, [], date_str, include_cover=True)
-    content_html = _build_html(req.title, req.tab_name, req.widgets, date_str, include_cover=False)
+    cover_html, _          = _build_html(req.title, req.tab_name, [], date_str, include_cover=True)
+    content_html, has_charts = _build_html(req.title, req.tab_name, req.widgets, date_str, include_cover=False)
 
     tmp_cover   = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
     tmp_content = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -614,13 +646,11 @@ async def export_pdf(req: PDFRequest):
     tmp_cover.close(); tmp_content.close(); tmp_final.close()
 
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(args=["--no-sandbox", "--disable-dev-shm-usage"])
-            # Pass 1: cover page — no header/footer, no charts
-            await _render_html(browser, cover_html, False, tmp_cover.name, header_footer=False)
-            # Pass 2: content pages — header/footer, page counter starts at 1
-            await _render_html(browser, content_html, has_charts, tmp_content.name, header_footer=True)
-            await browser.close()
+        browser = await _get_browser()
+        # Pass 1: cover page — no header/footer, no charts
+        await _render_html(browser, cover_html, False, tmp_cover.name, header_footer=False)
+        # Pass 2: content pages — header/footer, page counter starts at 1
+        await _render_html(browser, content_html, has_charts, tmp_content.name, header_footer=True)
 
         writer = PdfWriter()
         writer.add_page(PdfReader(tmp_cover.name).pages[0])

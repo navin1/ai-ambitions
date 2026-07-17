@@ -22,12 +22,9 @@ JOB_PROJECT   = (
 VALID_PERIODS = {"YTD", "Q1", "Q2", "Q3", "Q4"}
 PERIOD_ORDER = ["YTD", "Q1", "Q2", "Q3", "Q4"]
 
-# ── KPI metadata (mirrors TILE_META in frontend OverviewTab.tsx) ──────────────
-# range_min/max: the full scale of the range bar
-# target_min/max: the "good" target band (non-spend tiles only)
-# is_spend: True for the AI Cost tile; uses plan as a budget cap, not a band
-# fmt: format template used to display the value string
-
+# is_spend: True for the AI Cost tile; its kpi_summary row is stored in raw
+# dollars (see _build_tile_val) and its plan value is a budget cap, not a
+# target band, unlike the other (percent/points) tiles.
 TILE_META: dict[str, dict] = {
     "revenue":    {"is_spend": False},
     "nps":        {"is_spend": False},
@@ -40,7 +37,15 @@ KPI_ORDER = ["ai-cost", "revenue", "nps", "efficiency"]
 # Simple in-process cache for overview responses to speed repeated loads
 # keyed by "{fiscal_year}:{period}" -> (timestamp, response_dict)
 _OVERVIEW_CACHE: dict[str, tuple[float, dict]] = {}
-_OVERVIEW_CACHE_TTL = 0.0  # disabled — always fetch fresh from BigQuery
+_OVERVIEW_CACHE_TTL = 45.0  # short enough that admin uploads feel near-instant, long
+                            # enough to absorb the frequent staleTime:0 background
+                            # refetches from every tab switch/remount on the frontend
+
+
+def invalidate_overview_cache() -> None:
+    """Call after a successful admin data upload so stale figures aren't served
+    for the rest of the TTL window."""
+    _OVERVIEW_CACHE.clear()
 
 
 # ── Credential / client helpers ───────────────────────────────────────────────
@@ -247,7 +252,7 @@ def _fmt_value(kpi_id: str, val: float) -> str:
     if kpi_id == "nps":
         return f"{val:.1f}pts"
     if kpi_id == "efficiency":
-        return f"{val:.0f}%"
+        return f"{val:.1f}%"
     if kpi_id == "ai-cost":
         return _fmt_dollars_auto(val)
     return str(val)
@@ -258,9 +263,7 @@ def _fmt_delta(kpi_id: str, delta: float) -> str:
         sign = "−" if delta < 0 else "+"   # U+2212 minus sign
         return f"{sign}{_fmt_dollars_auto(abs(delta))}"
     sign = "+" if delta >= 0 else ""
-    if kpi_id in ("revenue", "nps"):
-        return f"{sign}{delta:.1f}"
-    return f"{sign}{delta:.0f}"
+    return f"{sign}{delta:.1f}"
 
 
 def _fmt_plan_label(kpi_id: str, plan_val: float) -> str | None:
@@ -269,7 +272,7 @@ def _fmt_plan_label(kpi_id: str, plan_val: float) -> str | None:
     if kpi_id == "nps":
         return f"Plan {plan_val:.1f}pts"
     if kpi_id == "efficiency":
-        return f"Plan {plan_val:.0f}%"
+        return f"Plan {plan_val:.1f}%"
     return None
 
 
@@ -309,27 +312,27 @@ def _build_tile_val(kpi_id: str, row: dict, meta: dict) -> dict:
     target_min = float(row["target_min"]) if row.get("target_min") is not None else None
     target_max = float(row["target_max"]) if row.get("target_max") is not None else None
 
-    # ai-cost's kpi_summary row is stored in raw dollars, same as the
-    # per-use-case data (unlike revenue/nps/efficiency, which are %/pts, not
-    # dollars) — scale to millions once here so every downstream consumer
+    # Spend KPIs (ai-cost) store their kpi_summary row in raw dollars, same as
+    # the per-use-case data (unlike revenue/nps/efficiency, which are %/pts,
+    # not dollars) — scale to millions once here so every downstream consumer
     # (status calc, formatting, tile fields) is unchanged.
-    if kpi_id == "ai-cost":
-        actual, plan, delta = actual / 1_000_000, plan / 1_000_000, delta / 1_000_000
-        range_min, range_max = range_min / 1_000_000, range_max / 1_000_000
-        if target_min is not None: target_min /= 1_000_000
-        if target_max is not None: target_max /= 1_000_000
+    if meta["is_spend"]:
+        actual, plan, delta = _dollars_to_millions(actual), _dollars_to_millions(plan), _dollars_to_millions(delta)
+        range_min, range_max = _dollars_to_millions(range_min), _dollars_to_millions(range_max)
+        target_min, target_max = _dollars_to_millions(target_min), _dollars_to_millions(target_max)
 
     status, status_label = _compute_status(kpi_id, actual, plan, meta, target_min, target_max)
 
     tile: dict = {
-        "value":       _fmt_value(kpi_id, actual),
-        "delta":       _fmt_delta(kpi_id, delta),
-        "deltaLabel":  delta_label,
-        "current":     actual,
-        "status":      status,
-        "statusLabel": status_label,
-        "rangeMin":    range_min,
-        "rangeMax":    range_max,
+        "value":        _fmt_value(kpi_id, actual),
+        "delta":        _fmt_delta(kpi_id, delta),
+        "deltaLabel":   delta_label,
+        "planDisplay":  _fmt_value(kpi_id, plan),
+        "current":      actual,
+        "status":       status,
+        "statusLabel":  status_label,
+        "rangeMin":     range_min,
+        "rangeMax":     range_max,
     }
 
     if meta["is_spend"]:
@@ -543,7 +546,7 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
         elif dt == "vendor":
             target["byVendor"].append(item)
 
-    return {
+    payload = {
         "fiscalYear": fiscal_year,
         "kpis": kpis,
         "investment": {
@@ -553,8 +556,5 @@ def build_overview_response(period: str, creds, fiscal_year: Optional[int] = Non
         },
         "kpiBreakdown": kpi_breakdown,
     }
-
-
-    # cache population handled above after building 'payload' — but keep this
-    # function return path simple. (If additional caching logic is desired
-    # populate _OVERVIEW_CACHE before returning.)
+    _OVERVIEW_CACHE[cache_key] = (time.time(), payload)
+    return payload

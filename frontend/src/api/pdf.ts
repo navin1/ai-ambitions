@@ -1,5 +1,6 @@
 import client from './client'
 import type { TileVal, DrillData, KpiDrillData } from './overview'
+import { fmtDollarsAutoMillions as fmtDollarsAuto } from '../utils/money'
 
 const TOP_UC = 25
 const TRUNCATE_LEN = 40
@@ -26,18 +27,9 @@ function aggregateBy<T>(
     .sort((a, b) => b.actual - a.actual)
 }
 
-// rows' `actual` is in millions (e.g. 12.34 == $12.34M) — auto-scale the raw
-// dollar total so small aggregates don't round away to "$0.0M"
-function fmtDollarsAuto(rawDollars: number, decimals = 2): string {
-  const abs = Math.abs(rawDollars)
-  if (abs >= 1_000_000) return `$${(rawDollars / 1_000_000).toFixed(decimals)}M`
-  if (abs >= 1_000)     return `$${(rawDollars / 1_000).toFixed(decimals)}K`
-  return `$${rawDollars.toFixed(decimals)}`
-}
-
 function sumTotal(rows: { actual: number }[], unit: 'dollar' | 'pts' | 'pct'): string {
   const t = rows.reduce((s, r) => s + r.actual, 0)
-  if (unit === 'dollar') return fmtDollarsAuto(t * 1_000_000)
+  if (unit === 'dollar') return fmtDollarsAuto(t)
   if (unit === 'pts')    return `${t.toFixed(2)} pts`
   return `${t.toFixed(1)}%`
 }
@@ -98,7 +90,11 @@ export async function exportOverviewPDF(
 
   // ── 1. KPI headline summary ──────────────────────────────────────────────────
   const kpiTableData = kpis.map((k, i) => ({
-    KPI: KPI_LABELS[i] ?? `KPI ${i + 1}`, Value: k.value, Delta: k.delta, Status: k.statusLabel,
+    KPI: KPI_LABELS[i] ?? `KPI ${i + 1}`,
+    Value: k.value,
+    Delta: k.deltaLabel ? `${k.delta} ${k.deltaLabel}` : k.delta,
+    Plan: k.planDisplay,
+    Status: k.statusLabel,
   }))
 
   // ── Filter focus section for KPI page ───────────────────────────────────────
@@ -115,16 +111,23 @@ export async function exportOverviewPDF(
     const effContrib  = effItems.reduce((s, i) => s + i.value, 0)
     const costContrib = costItems.reduce((s, u) => s + u.amount, 0)
 
+    // Same aggregation, over each item's planned value instead of its actual —
+    // gives the filtered subsection a plan comparison, not just totals-only.
+    const revPlanContrib  = revItems.reduce((s, i) => s + (i.dollarPlan ?? (i.plan != null ? i.plan * 20 : 0)), 0)
+    const npsPlanContrib  = npsItems.reduce((s, i) => s + (i.plan ?? 0), 0)
+    const effPlanContrib  = effItems.reduce((s, i) => s + (i.plan ?? 0), 0)
+    const costPlanContrib = costItems.reduce((s, u) => s + (u.plan ?? 0), 0)
+
     const pctOf = (part: number, total: number) =>
-      total > 0 ? `${((part / total) * 100).toFixed(0)}% of total` : '—'
+      total > 0 ? `${((part / total) * 100).toFixed(1)}% of total` : '—'
 
     filterSubsection = {
       title: `Filter Focus — ${filterSuffix}`,
       data: [
-        { KPI: 'Revenue Growth',  Contribution: fmtDollarsAuto(revContrib * 1_000_000, 1),  'vs. Total': pctOf(revPct, kpis[1]?.current ?? 0) },
-        { KPI: 'NPS Improvement', Contribution: `${npsContrib.toFixed(2)} pts`,              'vs. Total': pctOf(npsContrib, kpis[2]?.current ?? 0) },
-        { KPI: 'Efficiency Gain', Contribution: `${effContrib.toFixed(1)}%`,                 'vs. Total': pctOf(effContrib, kpis[3]?.current ?? 0) },
-        { KPI: 'AI Cost',         Contribution: fmtDollarsAuto(costContrib * 1_000_000, 1),  'vs. Total': pctOf(costContrib, kpis[0]?.current ?? 0) },
+        { KPI: 'Revenue Growth',  Contribution: fmtDollarsAuto(revContrib, 1),  Plan: fmtDollarsAuto(revPlanContrib, 1),        'vs. Total': pctOf(revPct, kpis[1]?.current ?? 0) },
+        { KPI: 'NPS Improvement', Contribution: `${npsContrib.toFixed(2)} pts`, Plan: `${npsPlanContrib.toFixed(2)} pts`,        'vs. Total': pctOf(npsContrib, kpis[2]?.current ?? 0) },
+        { KPI: 'Efficiency Gain', Contribution: `${effContrib.toFixed(1)}%`,    Plan: `${effPlanContrib.toFixed(1)}%`,          'vs. Total': pctOf(effContrib, kpis[3]?.current ?? 0) },
+        { KPI: 'AI Cost',         Contribution: fmtDollarsAuto(costContrib, 1), Plan: fmtDollarsAuto(costPlanContrib, 1),       'vs. Total': pctOf(costContrib, kpis[0]?.current ?? 0) },
       ],
     }
   }

@@ -1,35 +1,32 @@
 import { useState } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
+import { isMoneyColumn, fmtDollarsAutoRaw } from '../../utils/money'
 
-const MONEY_COL = /spend|dollar|amount|budget|cost|ytd|capital|expense|salary|fee/i
-const COUNT_COL = /count|ftp|fte|hc|headcount|qty|quantity|rank|row_num|num_/i
-const PCT_COL   = /pct|percent|_pct$/i
+const PCT_COL = /pct|percent|_pct$/i
+
+// Integers without decimals, decimals with up to 2 places
+function fmtPlainNumber(val: number): string {
+  return Number.isInteger(val)
+    ? val.toLocaleString()
+    : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
 function fmtCell(val: unknown, key: string): string {
   if (val == null) return '—'
   if (typeof val !== 'number') return String(val)
   const k = key.toLowerCase()
   if (PCT_COL.test(k)) return `${val.toFixed(2)}%`
-  if (MONEY_COL.test(k) && !COUNT_COL.test(k)) {
-    if (Math.abs(val) >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-    if (Math.abs(val) >= 1_000) return `$${(val / 1_000).toFixed(2)}K`
-    return `$${val.toFixed(2)}`
-  }
-  // Plain number: integers without decimals, decimals with up to 2 places
-  return Number.isInteger(val)
-    ? val.toLocaleString()
-    : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (isMoneyColumn(k)) return fmtDollarsAutoRaw(val)
+  return fmtPlainNumber(val)
 }
 
 function exactCell(val: unknown, key: string): string | undefined {
   if (typeof val !== 'number') return undefined
   const k = key.toLowerCase()
-  if (MONEY_COL.test(k) && !COUNT_COL.test(k)) {
+  if (isMoneyColumn(k)) {
     return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
-  return Number.isInteger(val)
-    ? val.toLocaleString()
-    : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return fmtPlainNumber(val)
 }
 
 interface Props {

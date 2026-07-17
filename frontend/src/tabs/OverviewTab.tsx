@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { fetchOverviewSummary, fetchAvailableYears, type TileVal, type DrillData, type KpiDrillData } from '../api/overview'
 import { exportOverviewPDF } from '../api/pdf'
+import { fmtDollarsAutoMillions as fmtDollarsAuto } from '../utils/money'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -211,15 +212,6 @@ function KpiCardSkeleton() {
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
-
-// v is in millions (e.g. 12.34 == $12.34M) — auto-scale so small amounts
-// (e.g. 0.0015 == $1,500) don't round away to "$0.00M"
-function fmtDollarsAuto(v: number, decimals = 2): string {
-  const abs = Math.abs(v)
-  if (abs >= 1)     return `$${v.toFixed(decimals)}M`
-  if (abs >= 0.001) return `$${(v * 1_000).toFixed(decimals)}K`
-  return `$${(v * 1_000_000).toFixed(decimals)}`
-}
 
 function fmtVal(v: number, unit: string): string {
   if (unit === '$M')  return fmtDollarsAuto(v)
@@ -526,7 +518,7 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
         <div className="mb-6">
           <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">
-            {heading} — {selectedKpi === 'nps' ? 'NPS impact' : selectedKpi === 'revenue' ? 'revenue impact ($M)' : 'efficiency gain (%)'}
+            {heading} — {selectedKpi === 'nps' ? 'NPS impact' : selectedKpi === 'revenue' ? 'revenue impact' : 'efficiency gain (%)'}
           </p>
         </div>
         <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
@@ -832,9 +824,8 @@ function SummaryWidget({
   }
 
   function fmtVal(v: number): string {
-    if (isSpend)                      return fmtDollarsAuto(v)
-    if (selectedKpi === 'revenue')     return fmtDollarsAuto(v)
-    if (selectedKpi === 'nps')        return `${v.toFixed(2)} pts`
+    if (isSpend || selectedKpi === 'revenue') return fmtDollarsAuto(v)
+    if (selectedKpi === 'nps')                return `${v.toFixed(2)} pts`
     return `${v.toFixed(1)}%`
   }
 
@@ -963,6 +954,13 @@ export function OverviewTab() {
   const drill        = data?.investment
   const kpiBreakdown = data?.kpiBreakdown
   const costVal      = tileVals?.[0]?.value ?? '…'
+  // Revenue Growth's own tile value is a % (kpi_summary isn't dollar-denominated
+  // for this KPI) — the dollar total is a separate sum over every use case's
+  // own revenue contribution, same source as the "Top 10" breakdown panels.
+  const revenueDollarVal = fmtDollarsAuto(
+    (kpiBreakdown?.revenue.byUseCase ?? []).reduce((s, i) => s + (i.dollarValue ?? i.value * 20), 0),
+    1
+  )
 
   const allBaseUC = drill?.byUseCase ?? []
 
@@ -1138,7 +1136,7 @@ export function OverviewTab() {
     selectedKpi === 'revenue'    ? 'Revenue Growth Breakdown'    :
     selectedKpi === 'nps'        ? 'NPS Improvement Breakdown'   : 'Efficiency Gain Breakdown'
   const sectionSubheading = isSpendView ? `Where the ${costVal} is going` :
-    selectedKpi === 'revenue'    ? '% revenue growth by initiative'       :
+    selectedKpi === 'revenue'    ? `Where the ${revenueDollarVal} is coming` :
     selectedKpi === 'nps'        ? 'NPS improvement points by initiative' : '% efficiency gain by initiative'
 
   return (

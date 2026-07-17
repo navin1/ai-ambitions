@@ -4,6 +4,7 @@ export interface TileVal {
   value: string
   delta: string
   deltaLabel: string
+  planDisplay: string
   current: number
   status: string
   statusLabel: string

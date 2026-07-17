@@ -115,6 +115,7 @@ async def upload_file(file: UploadFile, user: dict = Depends(auth.require_role("
         try:
             bq_creds = auth.get_bq_credentials()
             kpi_count, use_case_count = bigquery_client.replace_periods(result.kpi_rows, result.use_case_rows, bq_creds)
+            bigquery_client.invalidate_overview_cache()
         except Exception as exc:
             logger.exception("upload_file: BigQuery load failed for %s", safe_name)
             result = excel_ingest.IngestResult(
