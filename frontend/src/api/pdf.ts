@@ -89,13 +89,27 @@ export async function exportOverviewPDF(
   const titleTag     = filterSuffix ? ` [${filterSuffix}]` : ''
 
   // ── 1. KPI headline summary ──────────────────────────────────────────────────
-  const kpiTableData = kpis.map((k, i) => ({
-    KPI: KPI_LABELS[i] ?? `KPI ${i + 1}`,
-    Value: k.value,
-    Delta: k.deltaLabel ? `${k.delta} ${k.deltaLabel}` : k.delta,
-    Plan: k.planDisplay,
-    Status: k.statusLabel,
-  }))
+  // Revenue Growth's own tile value is a % (kpi_summary isn't dollar-denominated
+  // for this KPI) — the dollar total is a separate sum over every use case's
+  // own revenue contribution, unfiltered (the filtered version lives in the
+  // Filter Focus subsection below, when a filter is active).
+  const revenueTotalDollar = (kpiBreakdown?.revenue.byUseCase ?? []).reduce((s, i) => s + (i.dollarValue ?? i.value * 20), 0)
+  const kpiTableData: Record<string, string | null>[] = [
+    ...kpis.map((k, i) => ({
+      KPI: KPI_LABELS[i] ?? `KPI ${i + 1}`,
+      Value: k.value,
+      Delta: k.deltaLabel ? `${k.delta} ${k.deltaLabel}` : k.delta,
+      Plan: k.planDisplay,
+      Status: k.statusLabel,
+    })),
+    {
+      KPI: 'Revenue Growth Amount',
+      Value: fmtDollarsAuto(revenueTotalDollar, 1),
+      Delta: null,
+      Plan: null,
+      Status: null,
+    },
+  ]
 
   // ── Filter focus section for KPI page ───────────────────────────────────────
   let filterSubsection: { title: string; data: object[] } | null = null
