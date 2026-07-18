@@ -158,32 +158,32 @@ export function ChatPanel({ onAddWidget }: Props) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-white border-t border-brand-200 shadow-[0_-4px_24px_rgba(220,38,38,0.1)]"
+      className="fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-white dark:bg-gray-800 border-t border-brand-200 dark:border-brand-800 shadow-[0_-4px_24px_rgba(220,38,38,0.1)]"
       style={{ height: expanded ? `${EXPANDED_HEIGHT}px` : '54px', transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)' }}
     >
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-brand-50 to-white border-b border-brand-100">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-brand-50 to-white border-b border-brand-100 dark:border-brand-800">
           <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center">
-              <Sparkles size={13} className="text-brand-600" />
+            <div className="h-7 w-7 rounded-full bg-brand-100 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-800 flex items-center justify-center">
+              <Sparkles size={13} className="text-brand-600 dark:text-brand-400" />
             </div>
             <div>
-              <span className="text-sm font-semibold text-gray-800">AI Analyst</span>
-              <span className="text-xs text-gray-400 ml-2 hidden sm:inline">ask anything about AI investments</span>
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">AI Analyst</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 hidden sm:inline">ask anything about AI investments</span>
             </div>
           </div>
           <div className="flex items-center gap-0.5">
-            <button onClick={clearChat} title="Clear chat" className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+            <button onClick={clearChat} title="Clear chat" className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-lg transition-colors">
               <RotateCcw size={13} />
             </button>
-            <button onClick={() => setExpanded(false)} title="Minimize" className="flex items-center gap-1 px-2 py-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors text-xs">
+            <button onClick={() => setExpanded(false)} title="Minimize" className="flex items-center gap-1 px-2 py-1.5 text-slate-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-lg transition-colors text-xs">
               <ChevronDown size={14} /><span className="hidden sm:inline">Minimize</span>
             </button>
           </div>
         </div>
 
         {aiUnavailable && (
-          <div className="mx-4 mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 flex items-center gap-2">
+          <div className="mx-4 mt-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400 flex items-center gap-2">
             <span>⚠️</span><span>AI Analyst unavailable — Vertex AI is not configured.</span>
           </div>
         )}
@@ -193,7 +193,7 @@ export function ChatPanel({ onAddWidget }: Props) {
             <div className="flex flex-wrap gap-1.5 pb-1">
               {STARTERS.map(s => (
                 <button key={s} onClick={() => { setInput(s); inputRef.current?.focus() }}
-                  className="text-[11px] bg-brand-50 hover:bg-brand-100 hover:text-brand-700 text-brand-600 px-2.5 py-1 rounded-full transition-colors">
+                  className="text-[11px] bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/40 hover:text-brand-700 dark:hover:text-brand-400 text-brand-600 dark:text-brand-400 px-2.5 py-1 rounded-full transition-colors">
                   {s}
                 </button>
               ))}
@@ -203,19 +203,19 @@ export function ChatPanel({ onAddWidget }: Props) {
           {messages.map(msg => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[88%] flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`px-3 py-1.5 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-brand-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
+                <div className={`px-3 py-1.5 rounded-2xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-brand-600 text-white rounded-br-sm' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-sm'}`}>
                   {msg.loading
-                    ? <span className="flex items-center gap-2 text-slate-400"><Loader2 size={13} className="animate-spin flex-shrink-0" /><span className="text-xs italic">{msg.statusText ?? 'Starting…'}</span></span>
+                    ? <span className="flex items-center gap-2 text-slate-400 dark:text-slate-500"><Loader2 size={13} className="animate-spin flex-shrink-0" /><span className="text-xs italic">{msg.statusText ?? 'Starting…'}</span></span>
                     : <span className="whitespace-pre-wrap">{msg.text}</span>
                   }
                 </div>
 
                 {msg.widget && (msg.widget.data?.length > 0 || msg.widget.error) && (
-                  <div className={`w-full bg-white border rounded-xl overflow-hidden shadow-sm ${msg.widget.error ? 'border-red-200' : 'border-gray-200'}`}>
-                    <div className={`flex items-center justify-between px-3 py-2 border-b ${msg.widget.error ? 'bg-red-50 border-red-100' : 'bg-brand-50 border-brand-100'}`}>
-                      <span className="text-xs font-semibold text-slate-700 truncate">{msg.widget.title}</span>
+                  <div className={`w-full bg-white dark:bg-gray-800 border rounded-xl overflow-hidden shadow-sm ${msg.widget.error ? 'border-red-200 dark:border-red-800' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <div className={`flex items-center justify-between px-3 py-2 border-b ${msg.widget.error ? 'bg-red-50 dark:bg-red-950/40 border-red-100 dark:border-red-800' : 'bg-brand-50 dark:bg-brand-900/30 border-brand-100 dark:border-brand-800'}`}>
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{msg.widget.title}</span>
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        {!msg.widget.error && <span className="text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded">{msg.widget.chart_type.replace('_', ' ')}</span>}
+                        {!msg.widget.error && <span className="text-[10px] bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-1.5 py-0.5 rounded">{msg.widget.chart_type.replace('_', ' ')}</span>}
                         {onAddWidget && (
                           <button onClick={() => onAddWidget(msg.widget!)}
                             className={`flex items-center gap-1 text-[10px] text-white px-2 py-0.5 rounded ml-1 ${msg.widget.error ? 'bg-red-500 hover:bg-red-600' : 'bg-brand-600 hover:bg-brand-700'}`}>
@@ -225,9 +225,9 @@ export function ChatPanel({ onAddWidget }: Props) {
                       </div>
                     </div>
                     {msg.widget.error
-                      ? <div className="px-3 py-2.5"><span className="text-[11px] text-red-600 font-mono break-all leading-relaxed whitespace-pre-wrap">{msg.widget.error}</span></div>
+                      ? <div className="px-3 py-2.5"><span className="text-[11px] text-red-600 dark:text-red-400 font-mono break-all leading-relaxed whitespace-pre-wrap">{msg.widget.error}</span></div>
                       : <>
-                          {msg.widget.ai_description && <p className="text-[10px] text-brand-700 bg-brand-50 px-3 py-1.5 border-b border-brand-100">{msg.widget.ai_description}</p>}
+                          {msg.widget.ai_description && <p className="text-[10px] text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-3 py-1.5 border-b border-brand-100 dark:border-brand-800">{msg.widget.ai_description}</p>}
                           <div className="p-2">
                             <ChartRenderer
                               chart_type={msg.widget.chart_type as ChartType}
@@ -250,7 +250,7 @@ export function ChatPanel({ onAddWidget }: Props) {
                   <div className="flex flex-wrap gap-1.5 mt-0.5">
                     {msg.suggested_questions.map(q => (
                       <button key={q} onClick={() => sendMessage(q)}
-                        className="text-[11px] bg-brand-50 hover:bg-brand-100 text-brand-600 hover:text-brand-700 px-2.5 py-1 rounded-full border border-brand-100 transition-colors text-left">
+                        className="text-[11px] bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/40 text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-400 px-2.5 py-1 rounded-full border border-brand-100 dark:border-brand-800 transition-colors text-left">
                         ↳ {q}
                       </button>
                     ))}
@@ -263,35 +263,35 @@ export function ChatPanel({ onAddWidget }: Props) {
         </div>
       </div>
 
-      <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-3 border-t border-brand-100 bg-white">
+      <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-3 border-t border-brand-100 dark:border-brand-800 bg-white dark:bg-gray-800">
         {!expanded && (
-          <button onClick={() => setExpanded(true)} title="Open AI Analyst" className="flex items-center gap-1.5 flex-shrink-0 text-brand-600 hover:text-brand-700 transition-colors">
-            <div className="h-6 w-6 rounded-full bg-brand-50 border border-brand-200 flex items-center justify-center">
-              <Sparkles size={12} className="text-brand-600" />
+          <button onClick={() => setExpanded(true)} title="Open AI Analyst" className="flex items-center gap-1.5 flex-shrink-0 text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-400 transition-colors">
+            <div className="h-6 w-6 rounded-full bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 flex items-center justify-center">
+              <Sparkles size={12} className="text-brand-600 dark:text-brand-400" />
             </div>
             <ChevronUp size={14} />
           </button>
         )}
         <div className="flex-1 flex flex-col min-w-0">
-          {isSql(input) && <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded self-start mb-0.5">SQL — runs directly</span>}
+          {isSql(input) && <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded self-start mb-0.5">SQL — runs directly</span>}
           <textarea
             ref={inputRef} rows={1} value={input}
             onChange={e => setInput(e.target.value)}
             onFocus={() => setExpanded(true)}
             onKeyDown={handleKeyDown}
             placeholder={expanded ? 'Ask anything or paste SQL… (Enter to send)' : 'Ask anything about AI investments…'}
-            className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 resize-none outline-none leading-relaxed"
+            className="w-full bg-transparent text-sm text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 resize-none outline-none leading-relaxed"
             style={{ maxHeight: '72px', overflowY: 'auto' }}
           />
         </div>
         {SpeechRecognition && (
           <button onClick={toggleVoice} title={listening ? 'Stop recording' : 'Voice input'}
-            className={`flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${listening ? 'bg-brand-600 text-white animate-pulse' : 'text-brand-400 hover:text-brand-600 hover:bg-brand-50'}`}>
+            className={`flex-shrink-0 h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${listening ? 'bg-brand-600 text-white animate-pulse' : 'text-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30'}`}>
             {listening ? <MicOff size={14} /> : <Mic size={14} />}
           </button>
         )}
         {expanded && (
-          <button onClick={() => setExpanded(false)} title="Minimize" className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg flex-shrink-0 transition-colors">
+          <button onClick={() => setExpanded(false)} title="Minimize" className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-lg flex-shrink-0 transition-colors">
             <ChevronDown size={15} />
           </button>
         )}

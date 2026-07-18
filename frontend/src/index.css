@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --dot-pattern-color: #e5e7eb;
+  }
+  .dark {
+    --dot-pattern-color: #374151;
+  }
+
   html, body, #root {
     height: 100%;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -26,5 +33,11 @@
   }
   ::-webkit-scrollbar-thumb:hover {
     background: #9ca3af;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
   }
 }

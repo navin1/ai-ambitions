@@ -35,32 +35,32 @@ const STATUS: Record<Status, {
   badgeText: string; badgeBg: string; badgeBorder: string
   ring: string; ringOffset: string
 }> = {
-  'in-band':      { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
-  'below-target': { strip: 'bg-amber-400',   dot: 'bg-amber-400',   badgeText: 'text-amber-700',   badgeBg: 'bg-amber-50',    badgeBorder: 'border-amber-200',   ring: 'ring-amber-400',   ringOffset: 'ring-offset-amber-400'   },
-  'above-target': { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
-  'under-plan':   { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700', badgeBg: 'bg-emerald-50',  badgeBorder: 'border-emerald-200', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
-  'over-plan':    { strip: 'bg-rose-400',    dot: 'bg-rose-400',    badgeText: 'text-rose-700',    badgeBg: 'bg-rose-50',     badgeBorder: 'border-rose-200',    ring: 'ring-rose-400',    ringOffset: 'ring-offset-rose-400'    },
+  'in-band':      { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700 dark:text-emerald-400', badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40',  badgeBorder: 'border-emerald-200 dark:border-emerald-800', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'below-target': { strip: 'bg-amber-400',   dot: 'bg-amber-400',   badgeText: 'text-amber-700 dark:text-amber-400',   badgeBg: 'bg-amber-50 dark:bg-amber-950/40',    badgeBorder: 'border-amber-200 dark:border-amber-800',   ring: 'ring-amber-400',   ringOffset: 'ring-offset-amber-400'   },
+  'above-target': { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700 dark:text-emerald-400', badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40',  badgeBorder: 'border-emerald-200 dark:border-emerald-800', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'under-plan':   { strip: 'bg-emerald-400', dot: 'bg-emerald-400', badgeText: 'text-emerald-700 dark:text-emerald-400', badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40',  badgeBorder: 'border-emerald-200 dark:border-emerald-800', ring: 'ring-emerald-400', ringOffset: 'ring-offset-emerald-400' },
+  'over-plan':    { strip: 'bg-rose-400',    dot: 'bg-rose-400',    badgeText: 'text-rose-700 dark:text-rose-400',    badgeBg: 'bg-rose-50 dark:bg-rose-950/40',     badgeBorder: 'border-rose-200 dark:border-rose-800',    ring: 'ring-rose-400',    ringOffset: 'ring-offset-rose-400'    },
 }
 
 const KPI_TAG: Record<string, string> = {
-  REVENUE:    'bg-blue-50   text-blue-700   ring-1 ring-inset ring-blue-600/20',
-  EFFICIENCY: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
-  NPS:        'bg-purple-50 text-purple-700  ring-1 ring-inset ring-purple-600/20',
+  REVENUE:    'bg-blue-50 dark:bg-blue-950/40   text-blue-700 dark:text-blue-400   ring-1 ring-inset ring-blue-600/20',
+  EFFICIENCY: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-600/20',
+  NPS:        'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400  ring-1 ring-inset ring-purple-600/20',
 }
 
 const PHASE_STYLE: Record<string, string> = {
-  'Planning':   'bg-gray-100 text-gray-500',
-  'Pilot':      'bg-blue-50 text-blue-700',
-  'Scaling':    'bg-amber-50 text-amber-700',
-  'Production': 'bg-emerald-50 text-emerald-700',
+  'Planning':   'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+  'Pilot':      'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400',
+  'Scaling':    'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400',
+  'Production': 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400',
 }
 
 
 function asPct(val: number, min: number, max: number) {
   return `${Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)).toFixed(2)}%`
 }
-function kpiTag(kpi: string)                       { return KPI_TAG[kpi] ?? 'bg-gray-100 text-gray-600' }
-function phaseStyle(p: string | null | undefined)  { return PHASE_STYLE[p ?? ''] ?? 'bg-gray-100 text-gray-500' }
+function kpiTag(kpi: string)                       { return KPI_TAG[kpi] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400' }
+function phaseStyle(p: string | null | undefined)  { return PHASE_STYLE[p ?? ''] ?? 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400' }
 
 // ── Range bar ─────────────────────────────────────────────────────────────────
 
@@ -75,16 +75,16 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
     const planL  = asPct(budget, rangeMin, rangeMax)
     return (
       <div className="mt-5">
-        <div className="relative h-2 bg-gray-100 rounded-full w-full">
+        <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full w-full">
           <div className="absolute inset-y-0 left-0 bg-gray-800 rounded-full transition-all duration-700" style={{ width: fillW }} />
           <div className="absolute top-1/2 -translate-y-1/2 w-px h-5 bg-amber-400" style={{ left: planL }} />
         </div>
         <div className="relative flex justify-between mt-2">
-          <span className="text-[13px] text-gray-400">{fmtDollarsAuto(rangeMin, 0)}</span>
-          <span className="absolute text-[13px] font-semibold text-amber-600 -translate-x-1/2 whitespace-nowrap" style={{ left: planL }}>
+          <span className="text-[13px] text-gray-400 dark:text-gray-500">{fmtDollarsAuto(rangeMin, 0)}</span>
+          <span className="absolute text-[13px] font-semibold text-amber-600 dark:text-amber-400 -translate-x-1/2 whitespace-nowrap" style={{ left: planL }}>
             plan {fmtDollarsAuto(budget, 0)}
           </span>
-          <span className="text-[13px] text-gray-400">{fmtDollarsAuto(rangeMax, 0)}</span>
+          <span className="text-[13px] text-gray-400 dark:text-gray-500">{fmtDollarsAuto(rangeMax, 0)}</span>
         </div>
       </div>
     )
@@ -100,8 +100,8 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
 
   return (
     <div className="mt-5">
-      <div className="relative h-2 bg-gray-100 rounded-full w-full">
-        <div className="absolute inset-y-0 bg-gray-300 rounded-full" style={{ left: targetL, width: targetW }} />
+      <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full w-full">
+        <div className="absolute inset-y-0 bg-gray-300 dark:bg-gray-600 rounded-full" style={{ left: targetL, width: targetW }} />
         {vsPlan && planL && (
           <div className="absolute top-1/2 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-white shadow ring-1 ring-sky-200"
             style={{ left: planL, transform: 'translate(-50%, -50%)' }} />
@@ -110,9 +110,9 @@ function RangeBar({ meta, val, vsPlan }: { meta: TileMeta; val: TileVal; vsPlan:
           style={{ left: currentL, transform: 'translate(-50%, -50%)' }} />
       </div>
       <div className="flex justify-between mt-2">
-        <span className="text-[13px] text-gray-400">{rangeMin}{rangeUnit}</span>
-        <span className="text-[13px] font-medium text-gray-500">{targetLabel}</span>
-        <span className="text-[13px] text-gray-400">{rangeMax}{rangeUnit}</span>
+        <span className="text-[13px] text-gray-400 dark:text-gray-500">{rangeMin}{rangeUnit}</span>
+        <span className="text-[13px] font-medium text-gray-500 dark:text-gray-400">{targetLabel}</span>
+        <span className="text-[13px] text-gray-400 dark:text-gray-500">{rangeMax}{rangeUnit}</span>
       </div>
     </div>
   )
@@ -130,27 +130,27 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick, faContrib, se
     <div
       onClick={onClick}
       className={clsx(
-        'relative flex flex-col rounded-2xl overflow-hidden bg-white shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg',
-        isSelected ? clsx('ring-2 ring-offset-2', t.ring, t.ringOffset) : 'ring-1 ring-gray-100',
+        'relative flex flex-col rounded-2xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm transition-all duration-200 cursor-pointer hover:shadow-lg',
+        isSelected ? clsx('ring-2 ring-offset-2', t.ring, t.ringOffset) : 'ring-1 ring-gray-100 dark:ring-gray-700',
       )}
     >
       <div className={clsx('absolute left-0 top-0 bottom-0 w-1', t.strip)} />
       <div className="pl-6 pr-5 pt-5 pb-5 flex flex-col flex-1">
         <div className="flex justify-between items-center">
-          <span className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">{meta.label}</span>
+          <span className="text-xs font-bold tracking-[0.16em] text-gray-400 dark:text-gray-500 uppercase">{meta.label}</span>
           <span className={clsx('text-xs font-bold px-2 py-0.5 rounded-full border tracking-wide', t.badgeBg, t.badgeBorder, t.badgeText)}>
             {period}
           </span>
         </div>
         <div className="mt-3">
-          <div className="text-[2.6rem] font-black text-gray-900 leading-none tracking-tight">{val.value}</div>
+          <div className="text-[2.6rem] font-black text-gray-900 dark:text-gray-100 leading-none tracking-tight">{val.value}</div>
           <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-bold text-gray-700">{val.delta}</span>
-            <span className="text-xs text-gray-400">{val.deltaLabel}</span>
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{val.delta}</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">{val.deltaLabel}</span>
           </div>
         </div>
         <RangeBar meta={meta} val={val} vsPlan={vsPlan} />
-        <div className="mt-4 pt-3.5 border-t border-gray-50 flex items-center justify-between gap-2">
+        <div className="mt-4 pt-3.5 border-t border-gray-50 dark:border-gray-800 flex items-center justify-between gap-2">
           <span className={clsx(
             'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold tracking-wide border',
             t.badgeBg, t.badgeBorder, t.badgeText,
@@ -159,7 +159,7 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick, faContrib, se
             {val.statusLabel}
           </span>
           {vsPlan && val.planLabel && !meta.isSpendTile && (
-            <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sky-600 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 text-[13px] font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0" />
               {val.planLabel}
             </span>
@@ -168,24 +168,24 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick, faContrib, se
 
         {/* ── Functional Area contribution ────────────────────────────── */}
         {faContrib && selectedFA && (
-          <div className="mt-3 pt-3 border-t border-dashed border-violet-100">
+          <div className="mt-3 pt-3 border-t border-dashed border-violet-100 dark:border-violet-800">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-2 h-2 rounded-sm bg-violet-400 flex-shrink-0" />
-                <span className="text-xs font-black tracking-[0.12em] text-violet-600 uppercase truncate">{selectedFA}</span>
+                <span className="text-xs font-black tracking-[0.12em] text-violet-600 dark:text-violet-400 uppercase truncate">{selectedFA}</span>
               </div>
-              <span className="text-xs font-black text-gray-800 tabular-nums ml-2 flex-shrink-0">{faContrib.rawValue}</span>
+              <span className="text-xs font-black text-gray-800 dark:text-gray-200 tabular-nums ml-2 flex-shrink-0">{faContrib.rawValue}</span>
             </div>
             {faContrib.dollarStr && (
-              <p className="text-xs font-semibold text-violet-500 mb-1.5">{faContrib.dollarStr} revenue impact</p>
+              <p className="text-xs font-semibold text-violet-500 dark:text-violet-400 mb-1.5">{faContrib.dollarStr} revenue impact</p>
             )}
-            <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="relative h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="absolute inset-y-0 left-0 bg-violet-400 rounded-full"
                 style={{ width: `${Math.max(faContrib.pct, 1.5)}%`, transition: 'width 0.7s ease' }}
               />
             </div>
-            <p className="mt-1 text-xs text-gray-400 font-semibold">
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 font-semibold">
               {faContrib.pct.toFixed(0)}% contribution to this KPI
             </p>
           </div>
@@ -199,13 +199,13 @@ function KpiCard({ meta, val, period, vsPlan, isSelected, onClick, faContrib, se
 
 function KpiCardSkeleton() {
   return (
-    <div className="relative flex flex-col rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-gray-100 animate-pulse">
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-200" />
+    <div className="relative flex flex-col rounded-2xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 animate-pulse">
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-200 dark:bg-gray-700" />
       <div className="pl-6 pr-5 pt-5 pb-5 flex flex-col flex-1 gap-3">
-        <div className="h-3 w-28 bg-gray-200 rounded" />
-        <div className="h-12 w-24 bg-gray-200 rounded mt-1" />
-        <div className="h-2 w-full bg-gray-100 rounded-full mt-4" />
-        <div className="h-6 w-20 bg-gray-100 rounded-full mt-3" />
+        <div className="h-3 w-28 bg-gray-200 dark:bg-gray-700 rounded" />
+        <div className="h-12 w-24 bg-gray-200 dark:bg-gray-700 rounded mt-1" />
+        <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full mt-4" />
+        <div className="h-6 w-20 bg-gray-100 dark:bg-gray-700 rounded-full mt-3" />
       </div>
     </div>
   )
@@ -246,8 +246,8 @@ function AmountTip({ display, exact, className }: { display: string; exact?: str
 
 
 function SortIcon({ sortState, colKey }: { sortState: { key: string; dir: 'asc' | 'desc' }; colKey: string }) {
-  if (sortState.key !== colKey) return <span className="text-xs text-gray-300 select-none">⇅</span>
-  return <span className="text-xs text-gray-500">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
+  if (sortState.key !== colKey) return <span className="text-xs text-gray-300 dark:text-gray-600 select-none">⇅</span>
+  return <span className="text-xs text-gray-500 dark:text-gray-400">{sortState.dir === 'asc' ? '▲' : '▼'}</span>
 }
 
 // ── Fiscal year picker ────────────────────────────────────────────────────────
@@ -280,8 +280,8 @@ function YearPicker({ years, value, onChange }: { years: number[]; value: number
         className={clsx(
           'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl shadow-sm transition-all whitespace-nowrap',
           enabled
-            ? 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300 cursor-pointer'
-            : 'bg-gray-50 text-gray-400 border-gray-200 cursor-default',
+            ? 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer'
+            : 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 cursor-default',
         )}
       >
         {label}
@@ -289,14 +289,14 @@ function YearPicker({ years, value, onChange }: { years: number[]; value: number
       </button>
 
       {open && enabled && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 w-24 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute left-0 top-full mt-1.5 z-50 w-24 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
           {years.map(y => (
             <button
               key={y}
               onClick={() => { onChange(y); setOpen(false) }}
               className={clsx(
                 'w-full text-left px-3 py-2 text-xs font-semibold transition-colors',
-                y === value ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50',
+                y === value ? 'bg-gray-900 text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900',
               )}
             >
               FY{String(y).slice(-2)}
@@ -332,7 +332,7 @@ function FilterPicker({ label, items, value, onChange }: {
         onClick={() => setOpen(o => !o)}
         className={clsx(
           'flex items-center gap-2 pl-1 pr-3 py-2 rounded-xl border shadow-sm cursor-pointer transition-all duration-200 select-none',
-          active ? 'bg-violet-50 border-violet-300' : 'bg-white border-gray-200 hover:border-gray-300',
+          active ? 'bg-violet-50 dark:bg-violet-950/40 border-violet-300 dark:border-violet-700' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
           open && 'ring-2 ring-violet-100',
         )}
       >
@@ -342,40 +342,40 @@ function FilterPicker({ label, items, value, onChange }: {
           className={clsx(
             'text-xs font-black tracking-[0.14em] uppercase whitespace-nowrap px-2 py-0.5 rounded-lg transition-all duration-150',
             active
-              ? 'text-violet-600 bg-violet-100 hover:bg-violet-200 hover:text-violet-800 cursor-pointer'
-              : 'text-gray-700 hover:text-gray-900 cursor-pointer',
+              ? 'text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/40 hover:bg-violet-200 dark:hover:bg-violet-900/50 hover:text-violet-800 dark:hover:text-violet-300 cursor-pointer'
+              : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 cursor-pointer',
           )}
         >{label}</span>
-        <div className="w-px h-3.5 bg-gray-200" />
+        <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700" />
         <span className={clsx('text-xs font-semibold whitespace-nowrap max-w-[160px] truncate',
-          active ? 'text-violet-700' : 'text-gray-400'
+          active ? 'text-violet-700 dark:text-violet-400' : 'text-gray-400 dark:text-gray-500'
         )}>
           {value ?? 'All'}
         </span>
         {active
           ? <button
               onClick={e => { e.stopPropagation(); onChange(null); setOpen(false) }}
-              className="text-violet-400 hover:text-violet-700 transition-colors ml-0.5 flex-shrink-0"
+              className="text-violet-400 hover:text-violet-700 dark:hover:text-violet-400 transition-colors ml-0.5 flex-shrink-0"
             ><X size={12} /></button>
-          : <ChevronDown size={11} className={clsx('text-gray-400 transition-transform duration-200 ml-0.5 flex-shrink-0', open && 'rotate-180')} />
+          : <ChevronDown size={11} className={clsx('text-gray-400 dark:text-gray-500 transition-transform duration-200 ml-0.5 flex-shrink-0', open && 'rotate-180')} />
         }
       </div>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 w-60 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-60 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
           <div className="overflow-y-auto max-h-[320px]">
             <button
               className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors',
-                value === null ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:bg-gray-50'
+                value === null ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900'
               )}
               onClick={() => { onChange(null); setOpen(false) }}
             >All</button>
-            <div className="h-px bg-gray-100 mx-3" />
+            <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3" />
             {items.map(item => (
               <button
                 key={item}
                 className={clsx('w-full text-left px-4 py-2 text-xs font-semibold transition-colors truncate',
-                  value === item ? 'bg-violet-50 text-violet-700' : 'text-gray-700 hover:bg-violet-50 hover:text-violet-700'
+                  value === item ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400' : 'text-gray-700 dark:text-gray-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-700 dark:hover:text-violet-400'
                 )}
                 onClick={() => { onChange(item); setOpen(false) }}
               >{item}</button>
@@ -394,20 +394,20 @@ function DescriptionPopover({ text }: { text: string }) {
   const hasBullets = lines.some(l => /^[•\-*]/.test(l))
   return (
     <div
-      className="absolute left-0 top-full mt-2 z-50 w-80 bg-white border border-gray-200 rounded-xl shadow-xl p-4 max-h-64 overflow-y-auto"
+      className="absolute left-0 top-full mt-2 z-50 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-4 max-h-64 overflow-y-auto"
       onClickCapture={e => e.stopPropagation()}
     >
       {hasBullets ? (
         <ul className="space-y-2">
           {lines.map((line, i) => (
-            <li key={i} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
-              <span className="text-gray-400 flex-shrink-0 mt-px">•</span>
+            <li key={i} className="flex gap-2 text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+              <span className="text-gray-400 dark:text-gray-500 flex-shrink-0 mt-px">•</span>
               <span>{line.replace(/^[•\-*]\s*/, '')}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{text}</p>
+        <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">{text}</p>
       )}
     </div>
   )
@@ -416,13 +416,13 @@ function DescriptionPopover({ text }: { text: string }) {
 // ── Note popover (shown on KPI capsule click) ─────────────────────────────────
 
 const NOTE_POPOVER_STYLE: Record<string, { bg: string; border: string; text: string }> = {
-  REVENUE:    { bg: 'bg-blue-50',    border: 'border-blue-200',    text: 'text-blue-800'    },
-  NPS:        { bg: 'bg-purple-50',  border: 'border-purple-200',  text: 'text-purple-800'  },
-  EFFICIENCY: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800' },
+  REVENUE:    { bg: 'bg-blue-50 dark:bg-blue-950/40',    border: 'border-blue-200 dark:border-blue-800',    text: 'text-blue-800 dark:text-blue-300'    },
+  NPS:        { bg: 'bg-purple-50 dark:bg-purple-950/40',  border: 'border-purple-200 dark:border-purple-800',  text: 'text-purple-800 dark:text-purple-300'  },
+  EFFICIENCY: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', border: 'border-emerald-200 dark:border-emerald-800', text: 'text-emerald-800 dark:text-emerald-300' },
 }
 
 function NotePopover({ text, tag }: { text: string; tag: string }) {
-  const s = NOTE_POPOVER_STYLE[tag] ?? { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700' }
+  const s = NOTE_POPOVER_STYLE[tag] ?? { bg: 'bg-gray-50 dark:bg-gray-900', border: 'border-gray-200 dark:border-gray-700', text: 'text-gray-700 dark:text-gray-300' }
   return (
     <div
       className={clsx('absolute left-0 top-full mt-1 z-50 w-64 rounded-xl shadow-xl p-3 border', s.bg, s.border)}
@@ -523,32 +523,32 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
     }
 
     return (
-      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 p-6 flex flex-col">
         <div className="mb-6">
-          <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">
+          <p className="text-xs font-bold tracking-[0.16em] text-gray-400 dark:text-gray-500 uppercase">
             {heading} — {selectedKpi === 'nps' ? 'NPS impact' : selectedKpi === 'revenue' ? 'revenue impact' : 'efficiency gain (%)'}
           </p>
         </div>
-        <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
-          <span className="text-xs font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+        <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 dark:border-gray-700 mb-1">
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500 w-5 flex-shrink-0">#</span>
           <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('label')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Use case</span>
             <SortIcon sortState={sort} colKey="label" />
           </div>
           <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Status</span>
             <SortIcon sortState={sort} colKey="currentPhase" />
           </div>
           <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Area</span>
             <SortIcon sortState={sort} colKey="functionalArea" />
           </div>
           <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('value')}>
-            <span className="text-xs font-bold tracking-wider text-gray-400">{selectedKpi === 'revenue' ? 'Actual' : selectedKpi === 'nps' ? 'pts' : '%'}</span>
+            <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">{selectedKpi === 'revenue' ? 'Actual' : selectedKpi === 'nps' ? 'pts' : '%'}</span>
             <SortIcon sortState={sort} colKey="value" />
           </div>
           {vsPlan && (
-            <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+            <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200 dark:border-sky-800" onClick={() => handleSort('plan')}>
               <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
               <SortIcon sortState={sort} colKey="plan" />
             </div>
@@ -563,11 +563,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
             return (
               <div key={uc.label}>
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="text-xs font-black font-mono text-gray-300 dark:text-gray-600 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
                   <div className="min-w-0 flex-1 flex items-center gap-2">
                     <div className="relative min-w-0 flex-1">
                       <span
-                        className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', desc ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                        className={clsx('block truncate text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight', desc ? 'cursor-pointer border-b border-dashed border-gray-300 dark:border-gray-600' : 'cursor-default')}
                         title={uc.label}
                         onClick={e => { if (!desc) return; e.stopPropagation(); setOpenPopover(openPopover === uc.label ? null : uc.label) }}
                       >{uc.label}</span>
@@ -594,40 +594,40 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                     {uc.currentPhase ?? '—'}
                   </span>
                   <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
-                    <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                   </div>
                   <AmountTip
                     display={fmtDisplayVal(uc)}
                     exact={selectedKpi === 'revenue' ? exactDollar(uc.dollarValue ?? uc.value * 20) : undefined}
                     className={clsx('text-sm font-black tabular-nums shrink-0',
                       vsPlan && uc.plan != null
-                        ? (isOver ? 'text-green-600' : uc.value === uc.plan ? 'text-gray-900' : 'text-rose-500')
-                        : 'text-gray-900'
+                        ? (isOver ? 'text-green-600 dark:text-green-400' : uc.value === uc.plan ? 'text-gray-900 dark:text-gray-100' : 'text-rose-500 dark:text-rose-400')
+                        : 'text-gray-900 dark:text-gray-100'
                     )}
                   />
                   {vsPlan && (
                     <AmountTip
                       display={uc.plan != null ? fmtDisplayPlan(uc) : '—'}
                       exact={selectedKpi === 'revenue' && uc.plan != null ? exactDollar(uc.dollarPlan ?? uc.plan * 20) : undefined}
-                      className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                      className="text-sm font-bold tabular-nums text-sky-500 dark:text-sky-400 shrink-0 pl-3 border-l border-dashed border-sky-100 dark:border-sky-800"
                     />
                   )}
                 </div>
-                <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div className="absolute inset-y-0 left-0 rounded-full bg-gray-800"
                     style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }} />
                 </div>
-                <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 font-medium">{pctOfTotal}% of total</p>
               </div>
             )
           })}
           {items.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-                <X size={16} className="text-gray-400" />
+              <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-3">
+                <X size={16} className="text-gray-400 dark:text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No use cases match the selected filters</p>
-              <p className="text-xs text-gray-400 mt-1">for this KPI metric</p>
+              <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">No use cases match the selected filters</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">for this KPI metric</p>
             </div>
           )}
         </div>
@@ -662,30 +662,30 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
     : `All ${items.length} use cases`
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 p-6 flex flex-col">
       <div className="mb-6">
-        <p className="text-xs font-bold tracking-[0.16em] text-gray-400 uppercase">{heading} — by spend</p>
+        <p className="text-xs font-bold tracking-[0.16em] text-gray-400 dark:text-gray-500 uppercase">{heading} — by spend</p>
       </div>
-      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
-        <span className="text-xs font-bold tracking-wider text-gray-400 w-5 flex-shrink-0">#</span>
+      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 dark:border-gray-700 mb-1">
+        <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500 w-5 flex-shrink-0">#</span>
         <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('name')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">Use case</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Use case</span>
           <SortIcon sortState={sort} colKey="name" />
         </div>
         <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-40 flex-shrink-0" onClick={() => handleSort('currentPhase')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">Status</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Status</span>
           <SortIcon sortState={sort} colKey="currentPhase" />
         </div>
         <div className="hidden md:flex items-center gap-1 cursor-pointer select-none w-36 flex-shrink-0" onClick={() => handleSort('functionalArea')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">Area</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Area</span>
           <SortIcon sortState={sort} colKey="functionalArea" />
         </div>
         <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('amount')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">Actual</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Actual</span>
           <SortIcon sortState={sort} colKey="amount" />
         </div>
         {vsPlan && (
-          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200 dark:border-sky-800" onClick={() => handleSort('plan')}>
             <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
             <SortIcon sortState={sort} colKey="plan" />
           </div>
@@ -699,11 +699,11 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
           return (
             <div key={uc.name}>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-xs font-black font-mono text-gray-300 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-xs font-black font-mono text-gray-300 dark:text-gray-600 w-5 flex-shrink-0">{String(i + 1).padStart(2, '0')}</span>
                 <div className="min-w-0 flex-1 flex items-center gap-2">
                   <div className="relative min-w-0 flex-1">
                     <span
-                      className={clsx('block truncate text-sm font-semibold text-gray-700 leading-tight', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300' : 'cursor-default')}
+                      className={clsx('block truncate text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight', uc.description ? 'cursor-pointer border-b border-dashed border-gray-300 dark:border-gray-600' : 'cursor-default')}
                       title={uc.name}
                       onClick={e => { if (!uc.description) return; e.stopPropagation(); setOpenPopover(openPopover === uc.name ? null : uc.name) }}
                     >{uc.name}</span>
@@ -730,39 +730,39 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
                   {uc.currentPhase ?? '—'}
                 </span>
                 <div className="hidden md:block w-36 flex-shrink-0 min-w-0" title={uc.functionalArea ?? ''}>
-                  <span className="block text-xs text-gray-500 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 truncate leading-tight text-center">{uc.functionalArea ?? '—'}</span>
                 </div>
                 <AmountTip
                   display={fmtVal(uc.amount, '$M')}
                   exact={exactDollar(uc.amount)}
                   className={clsx('text-sm font-black tabular-nums shrink-0',
                     vsPlan && uc.plan != null
-                      ? (isOver ? 'text-rose-500' : uc.amount === uc.plan ? 'text-gray-900' : 'text-green-600')
-                      : 'text-gray-900'
+                      ? (isOver ? 'text-rose-500 dark:text-rose-400' : uc.amount === uc.plan ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400')
+                      : 'text-gray-900 dark:text-gray-100'
                   )}
                 />
                 {vsPlan && (
                   <AmountTip
                     display={uc.plan != null ? fmtVal(uc.plan, '$M') : '—'}
                     exact={uc.plan != null ? exactDollar(uc.plan) : undefined}
-                    className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                    className="text-sm font-bold tabular-nums text-sky-500 dark:text-sky-400 shrink-0 pl-3 border-l border-dashed border-sky-100 dark:border-sky-800"
                   />
                 )}
               </div>
-              <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div className={clsx('absolute inset-y-0 left-0 rounded-full', isOver && vsPlan ? 'bg-rose-500' : 'bg-gray-800')}
                   style={{ width: actualW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${i * 60}ms` }} />
               </div>
-              <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 font-medium">{pctOfTotal}% of total</p>
             </div>
           )
         })}
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-              <X size={16} className="text-gray-400" />
+            <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-3">
+              <X size={16} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <p className="text-sm font-semibold text-gray-500">No use cases match the selected filters</p>
+            <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">No use cases match the selected filters</p>
           </div>
         )}
       </div>
@@ -774,13 +774,13 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
 
 function WidgetSkeleton() {
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 animate-pulse">
-      <div className="h-3 w-32 bg-gray-200 rounded mb-4" />
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 p-6 animate-pulse">
+      <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4" />
       <div className="space-y-4">
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="flex items-center gap-4">
-            <div className="h-3 w-40 bg-gray-100 rounded" />
-            <div className="flex-1 h-2 bg-gray-100 rounded-full" />
+            <div className="h-3 w-40 bg-gray-100 dark:bg-gray-700 rounded" />
+            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full" />
           </div>
         ))}
       </div>
@@ -826,9 +826,9 @@ function SummaryWidget({
   const totalForPct = selectedKpi === 'revenue' ? rowTotal : kpiTotal
 
   function valueColor(r: SummaryRow): string {
-    if (!vsPlan || r.plan == null) return 'text-gray-900'
-    if (isSpend) return r.actual > r.plan ? 'text-rose-500' : r.actual < r.plan ? 'text-green-600' : 'text-gray-900'
-    return r.actual > r.plan ? 'text-green-600' : r.actual < r.plan ? 'text-rose-500' : 'text-gray-900'
+    if (!vsPlan || r.plan == null) return 'text-gray-900 dark:text-gray-100'
+    if (isSpend) return r.actual > r.plan ? 'text-rose-500 dark:text-rose-400' : r.actual < r.plan ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'
+    return r.actual > r.plan ? 'text-green-600 dark:text-green-400' : r.actual < r.plan ? 'text-rose-500 dark:text-rose-400' : 'text-gray-900 dark:text-gray-100'
   }
 
   function fmtVal(v: number): string {
@@ -839,33 +839,33 @@ function SummaryWidget({
 
   if (rows.length === 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-6 flex flex-col items-center justify-center min-h-[14rem]">
-        <p className="text-sm font-semibold text-gray-400">No data</p>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 p-6 flex flex-col items-center justify-center min-h-[14rem]">
+        <p className="text-sm font-semibold text-gray-400 dark:text-gray-500">No data</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-5 flex flex-col">
-      <div className="mb-3 pb-3 border-b border-gray-100">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 p-5 flex flex-col">
+      <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-700">
         <p className="text-sm font-black tracking-tight">
-          <span className="text-gray-400">{kpiLabel}</span>
-          <span className="font-bold text-gray-400"> By </span>
-          <span className="text-gray-900">{dimLabel}</span>
+          <span className="text-gray-400 dark:text-gray-500">{kpiLabel}</span>
+          <span className="font-bold text-gray-400 dark:text-gray-500"> By </span>
+          <span className="text-gray-900 dark:text-gray-100">{dimLabel}</span>
         </p>
       </div>
 
-      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 mb-1">
+      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100 dark:border-gray-700 mb-1">
         <div className="flex items-center gap-1 cursor-pointer select-none flex-1" onClick={() => handleSort('name')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">{dimLabel}</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">{dimLabel}</span>
           <SortIcon sortState={sort} colKey="name" />
         </div>
         <div className="flex items-center gap-1 cursor-pointer select-none shrink-0" onClick={() => handleSort('actual')}>
-          <span className="text-xs font-bold tracking-wider text-gray-400">Actual</span>
+          <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500">Actual</span>
           <SortIcon sortState={sort} colKey="actual" />
         </div>
         {vsPlan && (
-          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200" onClick={() => handleSort('plan')}>
+          <div className="flex items-center gap-1 cursor-pointer select-none shrink-0 pl-3 border-l border-dashed border-sky-200 dark:border-sky-800" onClick={() => handleSort('plan')}>
             <span className="text-xs font-bold tracking-wider text-sky-400">Plan</span>
             <SortIcon sortState={sort} colKey="plan" />
           </div>
@@ -881,7 +881,7 @@ function SummaryWidget({
           return (
             <div key={r.name}>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-sm font-semibold text-gray-700 flex-1 truncate min-w-0 leading-tight" title={r.name}>
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-1 truncate min-w-0 leading-tight" title={r.name}>
                   {r.name}
                 </span>
                 <AmountTip
@@ -893,11 +893,11 @@ function SummaryWidget({
                   <AmountTip
                     display={r.plan != null ? fmtVal(r.plan) : '—'}
                     exact={(isSpend || selectedKpi === 'revenue') && r.plan != null ? exactDollar(r.plan) : undefined}
-                    className="text-sm font-bold tabular-nums text-sky-500 shrink-0 pl-3 border-l border-dashed border-sky-100"
+                    className="text-sm font-bold tabular-nums text-sky-500 dark:text-sky-400 shrink-0 pl-3 border-l border-dashed border-sky-100 dark:border-sky-800"
                   />
                 )}
               </div>
-              <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="relative h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className={clsx(
                     'absolute inset-y-0 left-0 rounded-full',
@@ -906,7 +906,7 @@ function SummaryWidget({
                   style={{ width: barW, transition: `width 0.5s cubic-bezier(.4,0,.2,1) ${idx * 60}ms` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-gray-400 font-medium">{pctOfTotal}% of total</p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 font-medium">{pctOfTotal}% of total</p>
             </div>
           )
         })}
@@ -1148,23 +1148,23 @@ export function OverviewTab() {
     selectedKpi === 'nps'        ? 'NPS improvement points by initiative' : '% efficiency gain by initiative'
 
   return (
-    <div className="flex flex-col gap-5 p-6 bg-gray-50/60 min-h-full">
+    <div className="flex flex-col gap-5 p-6 bg-gray-50/60 dark:bg-gray-900/60 min-h-full">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center flex-wrap justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Overview</h1>
+            <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tight">Overview</h1>
             <span
               className={clsx(
-                'text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full animate-pulse',
+                'text-xs font-semibold text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full animate-pulse',
                 isFetching && !isLoading ? 'visible' : 'invisible',
               )}
             >
               refreshing…
             </span>
           </div>
-          <p className="text-xs text-gray-400 mt-0.5 font-medium tracking-wide">
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 font-medium tracking-wide">
             {displayYear !== undefined ? `FY${String(displayYear).slice(-2)}` : 'FY26'} · AI investment performance tracker
           </p>
         </div>
@@ -1175,7 +1175,7 @@ export function OverviewTab() {
               overflow (overflow-x:auto implicitly clips overflow-y too). */}
           <YearPicker years={years} value={displayYear} onChange={setSelectedYear} />
           <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
-            <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm shrink-0">
+            <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm shrink-0">
               {(['YTD', 'Q1', 'Q2', 'Q3', 'Q4'] as Period[]).map(p => {
                 const isDisabled = !availablePeriods.includes(p)
                 return (
@@ -1183,8 +1183,8 @@ export function OverviewTab() {
                     key={p} onClick={() => setPeriod(p)} disabled={isDisabled}
                     className={clsx(
                       'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide transition-all whitespace-nowrap',
-                      isDisabled ? 'text-gray-300 cursor-not-allowed'
-                        : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50',
+                      isDisabled ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : period === p ? 'bg-gray-900 text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900',
                     )}
                   >{p}</button>
                 )
@@ -1194,7 +1194,7 @@ export function OverviewTab() {
               onClick={() => setVsPlan(v => !v)}
               className={clsx(
                 'px-3 sm:px-4 py-2 text-xs font-bold tracking-wide border rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap',
-                vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:text-gray-800 hover:border-gray-300',
+                vsPlan ? 'bg-gray-900 text-white border-gray-900' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600',
               )}
             >VS PLAN</button>
             <button
@@ -1210,7 +1210,7 @@ export function OverviewTab() {
 
       {/* ── Error ─────────────────────────────────────────────────────── */}
       {isError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm font-medium">
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm font-medium">
           Failed to load dashboard data. Check BigQuery connectivity and refresh.
         </div>
       )}
@@ -1258,8 +1258,8 @@ export function OverviewTab() {
       <div className="space-y-3">
         <div className="flex items-start flex-wrap gap-3 justify-between px-1">
           <div>
-            <p className="text-xs font-bold tracking-[0.2em] text-gray-400 uppercase">{sectionHeading}</p>
-            <h2 className="text-lg font-black text-gray-900 mt-0.5 tracking-tight">{sectionSubheading}</h2>
+            <p className="text-xs font-bold tracking-[0.2em] text-gray-400 dark:text-gray-500 uppercase">{sectionHeading}</p>
+            <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 mt-0.5 tracking-tight">{sectionSubheading}</h2>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <FilterPicker

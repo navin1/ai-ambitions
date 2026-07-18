@@ -41,7 +41,7 @@ export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName 
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(0)
 
-  if (!data.length) return <p className="text-sm text-gray-400 text-center py-8">No data</p>
+  if (!data.length) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No data</p>
 
   const headers = Object.keys(data[0])
   const numericCols = new Set(headers.filter((h) => typeof data.find((r) => r[h] != null)?.[h] === 'number'))
@@ -66,15 +66,15 @@ export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName 
 
   return (
     <div className="flex flex-col gap-2">
-      <div className={`overflow-auto rounded border border-gray-200 ${scrollClassName}`}>
+      <div className={`overflow-auto rounded border border-gray-200 dark:border-gray-700 ${scrollClassName}`}>
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+            <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
               {headers.map((h) => (
                 <th
                   key={h}
                   onClick={() => toggleSort(h)}
-                  className={`px-3 py-2 font-semibold text-gray-600 whitespace-nowrap cursor-pointer hover:bg-gray-100 select-none ${numericCols.has(h) ? 'text-right' : 'text-left'}`}
+                  className={`px-3 py-2 font-semibold text-gray-600 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${numericCols.has(h) ? 'text-right' : 'text-left'}`}
                 >
                   <span className={`flex items-center gap-1 ${numericCols.has(h) ? 'justify-end' : ''}`}>
                     {h.replace(/_/g, ' ')}
@@ -88,12 +88,12 @@ export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName 
           </thead>
           <tbody>
             {visible.map((row, i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              <tr key={i} className={i % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}>
                 {headers.map((h) => (
                   <td
                     key={h}
                     title={exactCell(row[h], h)}
-                    className={`px-3 py-2 text-gray-700 whitespace-nowrap ${numericCols.has(h) ? 'text-right' : ''}`}
+                    className={`px-3 py-2 text-gray-700 dark:text-gray-300 whitespace-nowrap ${numericCols.has(h) ? 'text-right' : ''}`}
                   >
                     {fmtCell(row[h], h)}
                   </td>
@@ -104,13 +104,13 @@ export function DataTable({ data, maxRows = 100, pageSize = 20, scrollClassName 
         </table>
       </div>
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
           <span>
             {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} of {sorted.length} rows
           </span>
           <div className="flex gap-1">
-            <button disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50">Prev</button>
-            <button disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50">Next</button>
+            <button disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-900">Prev</button>
+            <button disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} className="px-2 py-1 border rounded disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-900">Next</button>
           </div>
         </div>
       )}

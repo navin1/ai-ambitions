@@ -35,7 +35,7 @@ function Dashboard({ user, onLogout }: { user: CurrentUser; onLogout: () => void
   function handleChatAddWidget(_widget: ChatWidgetDef) { /* no-op until tab expansion */ }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 font-sans overflow-hidden">
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900 font-sans overflow-hidden">
       <Header
         title="AI Ambitions"
         subtitle="AI Investment Tracker"
@@ -82,8 +82,8 @@ export default function App() {
 
   if (checking) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <Loader2 size={22} className="text-gray-400 animate-spin" />
+      <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <Loader2 size={22} className="text-gray-400 dark:text-gray-500 animate-spin" />
       </div>
     )
   }

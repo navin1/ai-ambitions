@@ -75,7 +75,7 @@ function pivotByColorField(
 }
 
 export function ChartRenderer({ chart_type, data, x_axis, y_axis, color_field, stacked, dual_axis, secondary_y, height = 220 }: Props) {
-  if (!data?.length) return <p className="text-sm text-gray-400 text-center py-8">No data</p>
+  if (!data?.length) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No data</p>
 
   // Robustly resolve keys — scan all rows so a null in data[0] doesn't break inference
   const allCols = Object.keys(data[0])
@@ -102,8 +102,8 @@ export function ChartRenderer({ chart_type, data, x_axis, y_axis, color_field, s
             : String(v)
           return (
             <div key={k} className="text-center">
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{k.replace(/_/g, ' ')}</p>
-              <p className="text-3xl font-bold text-gray-900">{formatted}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{k.replace(/_/g, ' ')}</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{formatted}</p>
             </div>
           )
         })}
