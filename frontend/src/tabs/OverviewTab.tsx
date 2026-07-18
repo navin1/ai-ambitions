@@ -485,10 +485,18 @@ function UseCaseWidget({ drill, vsPlan, kpiDrill, selectedKpi = 'revenue', kpiTo
     })
     const items = [...visibleItems].sort((a, b) => {
       if (sort.key === 'label')         return sort.dir === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)
-      if (sort.key === 'value')         return sort.dir === 'asc' ? a.value - b.value : b.value - a.value
+      if (sort.key === 'value') {
+        const av = selectedKpi === 'revenue' ? (a.dollarValue ?? a.value * 20) : a.value
+        const bv = selectedKpi === 'revenue' ? (b.dollarValue ?? b.value * 20) : b.value
+        return sort.dir === 'asc' ? av - bv : bv - av
+      }
       if (sort.key === 'currentPhase')  return sort.dir === 'asc' ? (a.currentPhase ?? '').localeCompare(b.currentPhase ?? '') : (b.currentPhase ?? '').localeCompare(a.currentPhase ?? '')
       if (sort.key === 'functionalArea') return sort.dir === 'asc' ? (a.functionalArea ?? '').localeCompare(b.functionalArea ?? '') : (b.functionalArea ?? '').localeCompare(a.functionalArea ?? '')
-      if (sort.key === 'plan') { const ap = a.plan ?? -1; const bp = b.plan ?? -1; return sort.dir === 'asc' ? ap - bp : bp - ap }
+      if (sort.key === 'plan') {
+        const ap = selectedKpi === 'revenue' ? (a.dollarPlan ?? (a.plan != null ? a.plan * 20 : -1)) : (a.plan ?? -1)
+        const bp = selectedKpi === 'revenue' ? (b.dollarPlan ?? (b.plan != null ? b.plan * 20 : -1)) : (b.plan ?? -1)
+        return sort.dir === 'asc' ? ap - bp : bp - ap
+      }
       return 0
     })
     const maxBar     = items.reduce((m, i) => Math.max(m, i.value), 0) || 1
